@@ -236,7 +236,7 @@ export default function QuizPage() {
         .select('*')
         .eq('user_id', user!.id)
         .eq('topic', currentQuiz.topic)
-        .single();
+        .maybeSingle();
 
       if (existingProgress) {
         // Update existing progress
