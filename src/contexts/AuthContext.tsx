@@ -41,6 +41,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user ?? null);
         setLoading(false);
 
+        // Create profile on sign up (event SIGNED_IN)
+        if (event === 'SIGNED_IN' && session?.user) {
+          // Check if profile exists
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .maybeSingle();
+
+          if (error && error.code !== 'PGRST116') {
+            console.error('Error checking profile:', error);
+          } else if (!profile) {
+            // Profile doesn't exist, create it
+            await createProfile(session.user);
+          }
+        }
+
         // Create profile on sign up
         if (event === 'SIGNED_UP' && session?.user) {
           await createProfile(session.user);
