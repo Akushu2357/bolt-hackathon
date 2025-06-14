@@ -57,11 +57,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             await createProfile(session.user);
           }
         }
-
-        // Create profile on sign up
-        if (event === 'SIGNED_UP' && session?.user) {
-          await createProfile(session.user);
-        }
       }
     );
 
