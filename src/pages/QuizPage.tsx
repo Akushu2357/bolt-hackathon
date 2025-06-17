@@ -169,7 +169,11 @@ export default function QuizPage() {
   const startQuiz = (quiz: Quiz) => {
     setCurrentQuiz(quiz);
     setCurrentQuestionIndex(0);
-    setSelectedAnswers(new Array(quiz.questions.length).fill([]));
+    // Initialize answers based on question type
+    const initialAnswers = quiz.questions.map(question => 
+      question.type === 'open_answer' ? '' : []
+    );
+    setSelectedAnswers(initialAnswers);
     setShowResults(false);
     setShowSidebar(false);
   };
@@ -241,7 +245,8 @@ export default function QuizPage() {
     currentQuiz.questions.forEach((question, index) => {
       if (question.type === 'open_answer') {
         // For open answers, give partial credit if answer exists
-        if (selectedAnswers[index] && (selectedAnswers[index] as string).trim().length > 0) {
+        const answer = selectedAnswers[index];
+        if (typeof answer === 'string' && answer.trim().length > 0) {
           correct += 0.5; // Give 50% credit for attempting open answer
         }
       } else {
@@ -351,7 +356,7 @@ export default function QuizPage() {
     const currentQuestion = currentQuiz!.questions[currentQuestionIndex];
     
     if (currentQuestion.type === 'open_answer') {
-      return currentAnswer && (currentAnswer as string).trim().length > 0;
+      return typeof currentAnswer === 'string' && currentAnswer.trim().length > 0;
     } else {
       return Array.isArray(currentAnswer) && currentAnswer.length > 0;
     }
