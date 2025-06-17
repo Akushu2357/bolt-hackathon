@@ -21,6 +21,7 @@ export default function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [showProfileMenu, setShowProfileMenu] = React.useState(false);
 
   const handleSignOut = async () => {
     await signOut();
@@ -31,7 +32,6 @@ export default function Layout({ children }: LayoutProps) {
     { name: 'Home', href: '/home', icon: Home },
     { name: 'Chat', href: '/chat', icon: MessageCircle },
     { name: 'Quiz', href: '/quiz', icon: FileQuestion },
-    { name: 'Profile', href: '/profile', icon: User },
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -73,19 +73,40 @@ export default function Layout({ children }: LayoutProps) {
               })}
             </nav>
 
-            {/* User Menu */}
+            {/* Profile Menu */}
             <div className="flex items-center space-x-4">
               <div className="hidden md:flex items-center space-x-3">
-                <span className="text-sm text-gray-600">
-                  {user?.email}
-                </span>
-                <button
-                  onClick={handleSignOut}
-                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors duration-200"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span>Sign Out</span>
-                </button>
+                <div className="relative">
+                  <button
+                    onClick={() => setShowProfileMenu(!showProfileMenu)}
+                    className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center hover:bg-primary-200 transition-colors duration-200"
+                  >
+                    <User className="w-4 h-4 text-primary-600" />
+                  </button>
+                  
+                  {showProfileMenu && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                      <div className="px-4 py-2 border-b border-gray-100">
+                        <p className="text-sm text-gray-600 truncate">{user?.email}</p>
+                      </div>
+                      <Link
+                        to="/profile"
+                        onClick={() => setShowProfileMenu(false)}
+                        className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        <User className="w-4 h-4" />
+                        <span>Profile</span>
+                      </Link>
+                      <button
+                        onClick={handleSignOut}
+                        className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 w-full text-left"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        <span>Sign Out</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Mobile menu button */}
@@ -129,6 +150,14 @@ export default function Layout({ children }: LayoutProps) {
                 <div className="px-3 py-2 text-sm text-gray-600">
                   {user?.email}
                 </div>
+                <Link
+                  to="/profile"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center space-x-3 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors duration-200 w-full"
+                >
+                  <User className="w-4 h-4" />
+                  <span>Profile</span>
+                </Link>
                 <button
                   onClick={handleSignOut}
                   className="flex items-center space-x-3 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors duration-200 w-full"
@@ -141,6 +170,14 @@ export default function Layout({ children }: LayoutProps) {
           </div>
         )}
       </header>
+
+      {/* Click outside to close profile menu */}
+      {showProfileMenu && (
+        <div 
+          className="fixed inset-0 z-40" 
+          onClick={() => setShowProfileMenu(false)}
+        ></div>
+      )}
 
       {/* Main Content */}
       <main className="flex-1">
