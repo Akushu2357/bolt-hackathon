@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { 
@@ -10,7 +10,9 @@ import {
   BookOpen,
   Award,
   Clock,
-  ArrowRight
+  ArrowRight,
+  Send,
+  Bot
 } from 'lucide-react';
 
 interface DashboardStats {
@@ -22,6 +24,7 @@ interface DashboardStats {
 
 export default function HomePage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats>({
     totalChats: 0,
     totalQuizzes: 0,
@@ -29,6 +32,8 @@ export default function HomePage() {
     weakAreas: []
   });
   const [loading, setLoading] = useState(true);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -73,6 +78,42 @@ export default function HomePage() {
       console.error('Error fetching dashboard stats:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleChatSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim() || chatLoading) return;
+
+    setChatLoading(true);
+    try {
+      // Create new chat session
+      const { data: newSession, error } = await supabase
+        .from('chat_sessions')
+        .insert({
+          user_id: user!.id,
+          title: chatInput.length > 50 ? chatInput.substring(0, 50) + '...' : chatInput
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Add the initial message to the session
+      await supabase
+        .from('chat_messages')
+        .insert({
+          session_id: newSession.id,
+          role: 'user',
+          content: chatInput
+        });
+
+      // Navigate to chat page
+      navigate('/chat');
+    } catch (error) {
+      console.error('Error creating chat session:', error);
+    } finally {
+      setChatLoading(false);
     }
   };
 
@@ -178,6 +219,44 @@ export default function HomePage() {
               </p>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Chat Bot Section */}
+      <div className="mb-8">
+        <div className="card bg-gradient-to-br from-primary-50 to-primary-100 border-primary-200">
+          <div className="flex items-center mb-4">
+            <div className="w-10 h-10 bg-primary-600 rounded-full flex items-center justify-center mr-3">
+              <Bot className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-primary-900">AI Tutor Assistant</h2>
+              <p className="text-sm text-primary-700">What would you like to learn about today?</p>
+            </div>
+          </div>
+          
+          <form onSubmit={handleChatSubmit} className="flex space-x-3">
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              placeholder="Ask me anything... e.g., 'Explain photosynthesis' or 'Help me with calculus'"
+              className="flex-1 px-4 py-3 border border-primary-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
+              disabled={chatLoading}
+            />
+            <button
+              type="submit"
+              disabled={!chatInput.trim() || chatLoading}
+              className="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+            >
+              {chatLoading ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+              <span>{chatLoading ? 'Starting...' : 'Ask'}</span>
+            </button>
+          </form>
         </div>
       </div>
 
