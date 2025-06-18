@@ -126,7 +126,7 @@ export default function Layout({ children }: LayoutProps) {
 
         {/* Mobile Navigation */}
         {isMobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-200 bg-white">
+          <div className="md:hidden border-t border-gray-200 bg-white relative" style={{ zIndex: 9999 }}>
             <div className="px-4 py-3 space-y-1">
               {navigation.map((item) => {
                 const Icon = item.icon;
