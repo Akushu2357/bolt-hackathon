@@ -248,7 +248,7 @@ export default function ChatPage() {
           {/* Sidebar */}
           <div className={`${
             showSidebar ? 'translate-x-0' : '-translate-x-full'
-          } lg:translate-x-0 fixed lg:relative inset-y-0 left-0 z-40 w-500 bg-white border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out lg:transition-none`}>
+          } lg:translate-x-0 fixed lg:relative inset-y-0 left-0 z-400 w-80 bg-white border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out lg:transition-none`}>
             
             {/* Sidebar Header */}
             <div className="p-4 border-b border-gray-200">
