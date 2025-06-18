@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { 
   Plus, 
@@ -46,12 +47,13 @@ interface QuizAttempt {
 
 export default function QuizPage() {
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [attempts, setAttempts] = useState<QuizAttempt[]>([]);
   const [currentQuiz, setCurrentQuiz] = useState<Quiz | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<(number[] | string)[]>([]);
-  const [showResults, setShowResults] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newQuizTopic, setNewQuizTopic] = useState('');
@@ -64,6 +66,15 @@ export default function QuizPage() {
       fetchAttempts();
     }
   }, [user]);
+
+  // Handle starting a quiz from navigation state
+  useEffect(() => {
+    if (location.state?.startQuiz) {
+      startQuiz(location.state.startQuiz);
+      // Clear the state to prevent re-triggering
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.state, navigate]);
 
   const fetchQuizzes = async () => {
     try {
@@ -174,7 +185,6 @@ export default function QuizPage() {
       question.type === 'open_answer' ? '' : []
     );
     setSelectedAnswers(initialAnswers);
-    setShowResults(false);
     setShowSidebar(false);
   };
 
@@ -229,7 +239,15 @@ export default function QuizPage() {
 
       await updateLearningProgress(score);
       
-      setShowResults(true);
+      // Navigate to results page with quiz data
+      navigate('/quiz-results', {
+        state: {
+          quiz: currentQuiz,
+          selectedAnswers: selectedAnswers,
+          score: score
+        }
+      });
+      
       fetchAttempts();
     } catch (error) {
       console.error('Error saving quiz attempt:', error);
@@ -339,7 +357,6 @@ export default function QuizPage() {
     setCurrentQuiz(null);
     setCurrentQuestionIndex(0);
     setSelectedAnswers([]);
-    setShowResults(false);
   };
 
   const getDifficultyColor = (difficulty: string) => {
@@ -448,7 +465,7 @@ export default function QuizPage() {
     }
   };
 
-  if (currentQuiz && !showResults) {
+  if (currentQuiz) {
     const currentQuestion = currentQuiz.questions[currentQuestionIndex];
     const progress = ((currentQuestionIndex + 1) / currentQuiz.questions.length) * 100;
 
@@ -533,76 +550,6 @@ export default function QuizPage() {
     );
   }
 
-  if (showResults && currentQuiz) {
-    const score = calculateScore();
-    const correctAnswers = currentQuiz.questions.filter((q, index) => {
-      if (q.type === 'open_answer') return true; // Count open answers as correct if attempted
-      const userAnswer = selectedAnswers[index] as number[];
-      const correctAnswer = q.correct_answer;
-      
-      if (q.type === 'single' || q.type === 'true_false') {
-        return userAnswer.length === 1 && userAnswer[0] === correctAnswer[0];
-      } else if (q.type === 'multiple') {
-        const userSet = new Set(userAnswer);
-        const correctSet = new Set(correctAnswer);
-        return userSet.size === correctSet.size && 
-               [...userSet].every(x => correctSet.has(x));
-      }
-      return false;
-    }).length;
-
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-8 text-center">
-            <div className="mb-6 sm:mb-8">
-              <Trophy className={`w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 ${
-                score >= 80 ? 'text-yellow-500' : score >= 60 ? 'text-gray-400' : 'text-red-500'
-              }`} />
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Quiz Complete!</h1>
-              <p className="text-lg sm:text-xl text-gray-600">
-                You scored {score}% ({correctAnswers}/{currentQuiz.questions.length})
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
-              <div className="text-center p-4 bg-green-50 rounded-lg">
-                <div className="text-xl sm:text-2xl font-bold text-green-600">{correctAnswers}</div>
-                <div className="text-sm text-gray-600">Correct</div>
-              </div>
-              <div className="text-center p-4 bg-red-50 rounded-lg">
-                <div className="text-xl sm:text-2xl font-bold text-red-600">
-                  {currentQuiz.questions.length - correctAnswers}
-                </div>
-                <div className="text-sm text-gray-600">Incorrect</div>
-              </div>
-              <div className="text-center p-4 bg-primary-50 rounded-lg">
-                <div className="text-xl sm:text-2xl font-bold text-primary-600">{score}%</div>
-                <div className="text-sm text-gray-600">Score</div>
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4">
-              <button
-                onClick={resetQuiz}
-                className="btn-primary"
-              >
-                Back to Quizzes
-              </button>
-              <button
-                onClick={() => startQuiz(currentQuiz)}
-                className="btn-secondary flex items-center justify-center space-x-2"
-              >
-                <RotateCcw className="w-4 h-4" />
-                <span>Retake Quiz</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
@@ -634,48 +581,71 @@ export default function QuizPage() {
         {showCreateForm && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-6 sm:mb-8">
             <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">Generate New Quiz</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Topic
-                </label>
-                <input
-                  type="text"
-                  value={newQuizTopic}
-                  onChange={(e) => setNewQuizTopic(e.target.value)}
-                  placeholder="e.g., Mathematics, Physics, History"
-                  className="input-field"
-                />
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Topic
+                  </label>
+                  <input
+                    type="text"
+                    value={newQuizTopic}
+                    onChange={(e) => setNewQuizTopic(e.target.value)}
+                    placeholder="e.g., Mathematics, Physics, History"
+                    className="input-field"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Difficulty
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={newQuizDifficulty}
+                      onChange={(e) => setNewQuizDifficulty(e.target.value as 'easy' | 'medium' | 'hard')}
+                      className="input-field appearance-none pr-10 bg-white"
+                    >
+                      <option value="easy">Easy</option>
+                      <option value="medium">Medium</option>
+                      <option value="hard">Hard</option>
+                    </select>
+                    <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Difficulty
-                </label>
-                <select
-                  value={newQuizDifficulty}
-                  onChange={(e) => setNewQuizDifficulty(e.target.value as 'easy' | 'medium' | 'hard')}
-                  className="input-field"
+              <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 pt-2">
+                <button
+                  onClick={generateQuiz}
+                  disabled={!newQuizTopic.trim() || loading}
+                  className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                 >
-                  <option value="easy">Easy</option>
-                  <option value="medium">Medium</option>
-                  <option value="hard">Hard</option>
-                </select>
+                  {loading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Generating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" />
+                      <span>Generate Quiz</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCreateForm(false);
+                    setNewQuizTopic('');
+                    setNewQuizDifficulty('medium');
+                  }}
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
               </div>
-            </div>
-            <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
-              <button
-                onClick={generateQuiz}
-                disabled={!newQuizTopic.trim() || loading}
-                className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? 'Generating...' : 'Generate Quiz'}
-              </button>
-              <button
-                onClick={() => setShowCreateForm(false)}
-                className="btn-secondary"
-              >
-                Cancel
-              </button>
             </div>
           </div>
         )}
