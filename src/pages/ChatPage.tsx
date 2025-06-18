@@ -234,7 +234,7 @@ export default function ChatPage() {
           {/* Mobile Sidebar Toggle Button */}
           <button
             onClick={() => setShowSidebar(!showSidebar)}
-            className={`lg:hidden fixed top-1/4 -translate-y-1/2 z-50 bg-white border border-gray-200 rounded-r-lg shadow-md p-2 transition-all duration-300 ${
+            className={`lg:hidden fixed top-1/4 -translate-y-1/2 z-50 bg-white border border-gray-200 rounded-r-lg shadow-md p-3 transition-all duration-300 ${
               showSidebar ? 'left-80' : 'left-0'
             }`}
           >
