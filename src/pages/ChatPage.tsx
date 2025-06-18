@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Send, Bot, User, Plus, MessageCircle, Trash2, Menu, X } from 'lucide-react';
+import { Send, Bot, User, Plus, MessageCircle, Trash2, ChevronRight, ChevronLeft, X } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -229,19 +229,27 @@ export default function ChatPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
-        <div className="flex h-[calc(100vh-8rem)] sm:h-[calc(100vh-12rem)] bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          {/* Mobile Header */}
-          <div className="lg:hidden absolute top-4 left-4 z-10">
-            <button
-              onClick={() => setShowSidebar(!showSidebar)}
-              className="p-2 bg-white rounded-lg shadow-md border border-gray-200"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-          </div>
+        <div className="flex h-[calc(100vh-8rem)] sm:h-[calc(100vh-12rem)] bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
+          
+          {/* Mobile Sidebar Toggle Button */}
+          <button
+            onClick={() => setShowSidebar(!showSidebar)}
+            className={`lg:hidden fixed top-1/2 -translate-y-1/2 z-50 bg-white border border-gray-200 rounded-r-lg shadow-md p-2 transition-all duration-300 ${
+              showSidebar ? 'left-80' : 'left-0'
+            }`}
+          >
+            {showSidebar ? (
+              <ChevronLeft className="w-5 h-5 text-gray-600" />
+            ) : (
+              <ChevronRight className="w-5 h-5 text-gray-600" />
+            )}
+          </button>
 
           {/* Sidebar */}
-          <div className={`${showSidebar ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 fixed lg:relative inset-y-0 left-0 z-50 w-80 bg-white border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out lg:transition-none`}>
+          <div className={`${
+            showSidebar ? 'translate-x-0' : '-translate-x-full'
+          } lg:translate-x-0 fixed lg:relative inset-y-0 left-0 z-40 w-80 bg-white border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out lg:transition-none`}>
+            
             {/* Sidebar Header */}
             <div className="p-4 border-b border-gray-200">
               <div className="flex items-center justify-between mb-4">
@@ -311,7 +319,7 @@ export default function ChatPage() {
           {/* Overlay for mobile */}
           {showSidebar && (
             <div 
-              className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40" 
+              className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-30" 
               onClick={() => setShowSidebar(false)}
             ></div>
           )}
@@ -322,7 +330,7 @@ export default function ChatPage() {
               <>
                 {/* Chat Header */}
                 <div className="p-4 border-b border-gray-200 bg-white">
-                  <h3 className="font-semibold text-gray-900 truncate pl-12 lg:pl-0">
+                  <h3 className="font-semibold text-gray-900 truncate">
                     {currentSession.title}
                   </h3>
                 </div>
