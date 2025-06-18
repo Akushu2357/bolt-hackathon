@@ -398,25 +398,32 @@ export default function QuizResultsPage() {
             </div>
 
             {/* Performance Analysis */}
-            <div className="card mb-6 sm:mb-8">
-              <div className="flex items-center mb-4">
-                <Brain className="w-6 h-6 text-primary-600 mr-3" />
-                <h2 className="text-xl font-semibold text-gray-900">Performance Analysis</h2>
-              </div>
+            <div className="bg-gradient-to-br from-primary-50 via-white to-blue-50 rounded-xl shadow-lg border border-primary-200 p-4 sm:p-6 mb-6 sm:mb-8 relative overflow-hidden">
+              {/* Gradient overlay */}
+              <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 to-blue-500/5 pointer-events-none"></div>
               
-              {loadingAnalysis ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full animate-spin mr-3"></div>
-                  <span className="text-gray-600">Analyzing your performance...</span>
-                </div>
-              ) : (
-                <div className="bg-primary-50 border border-primary-200 rounded-lg p-4 sm:p-6">
-                  <div className="flex items-start">
-                    <Lightbulb className="w-5 h-5 text-primary-600 mr-3 mt-0.5 flex-shrink-0" />
-                    <p className="text-primary-800 leading-relaxed">{analysisText}</p>
+              <div className="relative">
+                <div className="flex items-center mb-4">
+                  <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-blue-600 rounded-lg flex items-center justify-center mr-3">
+                    <Brain className="w-5 h-5 text-white" />
                   </div>
+                  <h2 className="text-xl font-semibold text-gray-900">Performance Analysis</h2>
                 </div>
-              )}
+                
+                {loadingAnalysis ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full animate-spin mr-3"></div>
+                    <span className="text-gray-600">Analyzing your performance...</span>
+                  </div>
+                ) : (
+                  <div className="bg-white/80 backdrop-blur-sm border border-primary-200 rounded-lg p-4 sm:p-6">
+                    <div className="flex items-start">
+                      <Lightbulb className="w-5 h-5 text-primary-600 mr-3 mt-0.5 flex-shrink-0" />
+                      <p className="text-primary-800 leading-relaxed">{analysisText}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Detailed Answers */}
@@ -535,9 +542,14 @@ export default function QuizResultsPage() {
                             )}
 
                             {/* Explanation */}
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                              <div className="flex items-start">
-                                <Target className="w-5 h-5 text-blue-600 mr-2 mt-0.5 flex-shrink-0" />
+                            <div className="bg-gradient-to-br from-blue-50 via-white to-indigo-50 border border-blue-200 rounded-lg p-4 relative overflow-hidden">
+                              {/* Gradient overlay */}
+                              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-indigo-500/5 pointer-events-none"></div>
+                              
+                              <div className="relative flex items-start">
+                                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
+                                  <Target className="w-4 h-4 text-white" />
+                                </div>
                                 <div>
                                   <h4 className="font-medium text-blue-900 mb-2">Explanation:</h4>
                                   <p className="text-blue-800 text-sm leading-relaxed">
@@ -703,19 +715,26 @@ export default function QuizResultsPage() {
                   )}
 
                   {/* Performance Trend */}
-                  <div className="p-3 bg-primary-50 rounded-lg border border-primary-200">
-                    <div className="flex items-center mb-2">
-                      <TrendingUp className="w-4 h-4 text-primary-600 mr-2" />
-                      <span className="text-sm font-medium text-primary-900">Performance Insight</span>
+                  <div className="bg-gradient-to-br from-primary-50 via-white to-blue-50 rounded-lg border border-primary-200 p-3 relative overflow-hidden">
+                    {/* Gradient overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 to-blue-500/5 pointer-events-none"></div>
+                    
+                    <div className="relative">
+                      <div className="flex items-center mb-2">
+                        <div className="w-6 h-6 bg-gradient-to-br from-primary-500 to-blue-600 rounded flex items-center justify-center mr-2">
+                          <TrendingUp className="w-3 h-3 text-white" />
+                        </div>
+                        <span className="text-sm font-medium text-primary-900">Performance Insight</span>
+                      </div>
+                      <p className="text-xs text-primary-700">
+                        {actualScore > quizStats.averageScore 
+                          ? `Great job! This score is ${actualScore - quizStats.averageScore}% above your average.`
+                          : actualScore === quizStats.averageScore
+                          ? 'This score matches your average performance.'
+                          : `This score is ${quizStats.averageScore - actualScore}% below your average. Keep practicing!`
+                        }
+                      </p>
                     </div>
-                    <p className="text-xs text-primary-700">
-                      {actualScore > quizStats.averageScore 
-                        ? `Great job! This score is ${actualScore - quizStats.averageScore}% above your average.`
-                        : actualScore === quizStats.averageScore
-                        ? 'This score matches your average performance.'
-                        : `This score is ${quizStats.averageScore - actualScore}% below your average. Keep practicing!`
-                      }
-                    </p>
                   </div>
                 </div>
               ) : (
