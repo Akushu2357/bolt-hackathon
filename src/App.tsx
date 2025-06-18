@@ -7,6 +7,7 @@ import AuthPage from './pages/AuthPage';
 import HomePage from './pages/HomePage';
 import ChatPage from './pages/ChatPage';
 import QuizPage from './pages/QuizPage';
+import QuizResultsPage from './pages/QuizResultsPage';
 import ProfilePage from './pages/ProfilePage';
 import LoadingSpinner from './components/LoadingSpinner';
 
@@ -65,6 +66,13 @@ function AppRoutes() {
         <ProtectedRoute>
           <Layout>
             <QuizPage />
+          </Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/quiz-results" element={
+        <ProtectedRoute>
+          <Layout>
+            <QuizResultsPage />
           </Layout>
         </ProtectedRoute>
       } />
