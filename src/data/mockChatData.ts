@@ -72,44 +72,6 @@ export const mockChatSessions: MockChatSession[] = [
   },
   {
     id: '2',
-    title: 'Physics Help',
-    lastMessage: 'The key is understanding Newton\'s second law...',
-    timestamp: '2025-01-09T09:15:00Z',
-    unreadCount: 0,
-    isOnline: true,
-    messages: [
-      {
-        id: 'm7',
-        role: 'user',
-        content: 'I\'m struggling with force and acceleration problems.',
-        timestamp: '2025-01-09T09:10:00Z',
-        status: 'read'
-      },
-      {
-        id: 'm8',
-        role: 'assistant',
-        content: 'Force and acceleration are related by Newton\'s second law: F = ma. This means force equals mass times acceleration. Let\'s work through some examples!',
-        timestamp: '2025-01-09T09:12:00Z',
-        status: 'read'
-      },
-      {
-        id: 'm9',
-        role: 'user',
-        content: 'If a 10kg object accelerates at 5 m/s², what\'s the force?',
-        timestamp: '2025-01-09T09:14:00Z',
-        status: 'read'
-      },
-      {
-        id: 'm10',
-        role: 'assistant',
-        content: 'The key is understanding Newton\'s second law...',
-        timestamp: '2025-01-09T09:15:00Z',
-        status: 'read'
-      }
-    ]
-  },
-  {
-    id: '3',
     title: 'Chemistry Study Session',
     lastMessage: 'Organic chemistry can be challenging, but...',
     timestamp: '2025-01-08T16:45:00Z',
@@ -146,82 +108,6 @@ export const mockChatSessions: MockChatSession[] = [
       }
     ]
   },
-  {
-    id: '4',
-    title: 'History Discussion',
-    lastMessage: 'The Industrial Revolution had profound effects...',
-    timestamp: '2025-01-08T14:20:00Z',
-    unreadCount: 0,
-    isOnline: false,
-    messages: [
-      {
-        id: 'm15',
-        role: 'user',
-        content: 'Tell me about the Industrial Revolution.',
-        timestamp: '2025-01-08T14:15:00Z',
-        status: 'read'
-      },
-      {
-        id: 'm16',
-        role: 'assistant',
-        content: 'The Industrial Revolution was a period of major industrialization that took place during the late 1700s and early 1800s. It began in Britain and spread to other parts of Europe and North America.',
-        timestamp: '2025-01-08T14:17:00Z',
-        status: 'read'
-      },
-      {
-        id: 'm17',
-        role: 'user',
-        content: 'What were the main innovations?',
-        timestamp: '2025-01-08T14:19:00Z',
-        status: 'read'
-      },
-      {
-        id: 'm18',
-        role: 'assistant',
-        content: 'The Industrial Revolution had profound effects...',
-        timestamp: '2025-01-08T14:20:00Z',
-        status: 'read'
-      }
-    ]
-  },
-  {
-    id: '5',
-    title: 'Biology Q&A',
-    lastMessage: 'Cell division is a complex process...',
-    timestamp: '2025-01-07T11:30:00Z',
-    unreadCount: 3,
-    isOnline: true,
-    messages: [
-      {
-        id: 'm19',
-        role: 'user',
-        content: 'How does cell division work?',
-        timestamp: '2025-01-07T11:25:00Z',
-        status: 'read'
-      },
-      {
-        id: 'm20',
-        role: 'assistant',
-        content: 'Cell division is the process by which a parent cell divides into two or more daughter cells. There are two main types: mitosis and meiosis.',
-        timestamp: '2025-01-07T11:27:00Z',
-        status: 'read'
-      },
-      {
-        id: 'm21',
-        role: 'user',
-        content: 'What\'s the difference between mitosis and meiosis?',
-        timestamp: '2025-01-07T11:29:00Z',
-        status: 'delivered'
-      },
-      {
-        id: 'm22',
-        role: 'assistant',
-        content: 'Cell division is a complex process...',
-        timestamp: '2025-01-07T11:30:00Z',
-        status: 'sent'
-      }
-    ]
-  }
 ];
 
 export const getFormattedTime = (timestamp: string): string => {
