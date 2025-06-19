@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpen, CheckCircle, XCircle, Target } from 'lucide-react';
+import { BookOpen, CheckCircle, XCircle, Target, Lightbulb, AlertTriangle } from 'lucide-react';
 import { QuizScoringService } from '../../services/quizScoringService';
 import { GradedQuestion } from '../../services/gradingService';
 
@@ -29,6 +29,20 @@ export default function DetailedReview({
   setExpandedQuestion,
   gradingResults 
 }: DetailedReviewProps) {
+  
+  const getGradingResult = (questionText: string): GradedQuestion | undefined => {
+    return gradingResults?.find(result => result.question === questionText);
+  };
+
+  const getGradeColor = (grade: string) => {
+    switch (grade) {
+      case 'correct': return 'text-green-600 bg-green-100';
+      case 'partial': return 'text-yellow-600 bg-yellow-100';
+      case 'incorrect': return 'text-red-600 bg-red-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
   return (
     <div className="card">
       <div className="flex items-center mb-6">
@@ -41,6 +55,7 @@ export default function DetailedReview({
           const userAnswer = selectedAnswers[index];
           const isExpanded = expandedQuestion === index;
           const feedback = QuizScoringService.getAnswerFeedback(question, userAnswer, gradingResults);
+          const gradingResult = getGradingResult(question.question);
           
           return (
             <div key={question.id} className="border border-gray-200 rounded-lg overflow-hidden">
@@ -52,7 +67,7 @@ export default function DetailedReview({
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center mb-2">
+                    <div className="flex items-center mb-2 flex-wrap gap-2">
                       <span className="text-sm font-medium text-gray-500 mr-3">
                         Question {index + 1}
                       </span>
@@ -65,12 +80,17 @@ export default function DetailedReview({
                         <span className="text-sm font-medium">
                           {isCorrect ? 'Correct' : 'Incorrect'}
                         </span>
-                        {feedback.score !== undefined && (
-                          <span className="text-sm ml-2 px-2 py-1 bg-gray-100 rounded">
-                            Score: {Math.round(feedback.score * 100)}%
-                          </span>
-                        )}
                       </div>
+                      {gradingResult && (
+                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${getGradeColor(gradingResult.grade)}`}>
+                          AI: {gradingResult.grade} ({Math.round(gradingResult.score * 100)}%)
+                        </span>
+                      )}
+                      {feedback.score !== undefined && (
+                        <span className="text-sm ml-2 px-2 py-1 bg-gray-100 rounded">
+                          Score: {Math.round(feedback.score * 100)}%
+                        </span>
+                      )}
                     </div>
                     <h3 className="text-lg font-medium text-gray-900 mb-2">
                       {question.question}
@@ -155,7 +175,7 @@ export default function DetailedReview({
                     </div>
                   )}
 
-                  {/* Show open-ended answers */}
+                  {/* Show open-ended answers with AI feedback */}
                   {question.type === 'open_ended' && (
                     <div className="mb-4">
                       <h4 className="font-medium text-gray-900 mb-2">Your Answer:</h4>
@@ -164,11 +184,63 @@ export default function DetailedReview({
                           {typeof userAnswer === 'string' ? userAnswer : 'No answer provided'}
                         </p>
                       </div>
+                      
+                      {/* AI Grading Feedback */}
+                      {gradingResult && (
+                        <div className="mt-4 space-y-3">
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <h5 className="font-medium text-blue-900 mb-2 flex items-center">
+                              <Brain className="w-4 h-4 mr-1" />
+                              AI Feedback:
+                            </h5>
+                            <p className="text-blue-800 text-sm leading-relaxed">
+                              {gradingResult.feedback}
+                            </p>
+                          </div>
+
+                          {/* Specific Improvements */}
+                          {gradingResult.improvements && gradingResult.improvements.length > 0 && (
+                            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                              <h5 className="font-medium text-orange-900 mb-2 flex items-center">
+                                <Lightbulb className="w-4 h-4 mr-1" />
+                                Suggestions for Improvement:
+                              </h5>
+                              <ul className="space-y-1">
+                                {gradingResult.improvements.map((improvement, idx) => (
+                                  <li key={idx} className="text-sm text-orange-700 flex items-start">
+                                    <span className="text-orange-500 mr-2">•</span>
+                                    {improvement}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Weak Areas */}
+                          {gradingResult.weakAreas && gradingResult.weakAreas.length > 0 && (
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                              <h5 className="font-medium text-red-900 mb-2 flex items-center">
+                                <AlertTriangle className="w-4 h-4 mr-1" />
+                                Areas to Focus On:
+                              </h5>
+                              <div className="flex flex-wrap gap-2">
+                                {gradingResult.weakAreas.map((area, idx) => (
+                                  <span key={idx} className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded-full">
+                                    {area}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Model Answer */}
                       {typeof question.correct_answer === 'string' && (
                         <>
-                          <h4 className="font-medium text-gray-900 mb-2 mt-3">Model Answer:</h4>
-                          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                            <p className="text-blue-800 text-sm">
+                          <h4 className="font-medium text-gray-900 mb-2 mt-4">Model Answer:</h4>
+                          <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                            <p className="text-green-800 text-sm">
                               {question.correct_answer}
                             </p>
                           </div>
@@ -177,24 +249,7 @@ export default function DetailedReview({
                     </div>
                   )}
 
-                  {/* Show improvements for open-ended questions */}
-                  {feedback.improvements && feedback.improvements.length > 0 && (
-                    <div className="mb-4">
-                      <h4 className="font-medium text-orange-700 mb-2 flex items-center">
-                        <Target className="w-4 h-4 mr-1" />
-                        Suggestions for Improvement:
-                      </h4>
-                      <ul className="space-y-1">
-                        {feedback.improvements.map((improvement, idx) => (
-                          <li key={idx} className="text-sm text-orange-600 bg-orange-50 px-2 py-1 rounded">
-                            • {improvement}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Show explanation */}
+                  {/* Show general explanation */}
                   <div className="bg-gradient-to-br from-blue-50 via-white to-indigo-50 border border-blue-200 rounded-lg p-4 relative overflow-hidden">
                     <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-indigo-500/5 pointer-events-none"></div>
                     <div className="relative flex items-start">
@@ -202,7 +257,7 @@ export default function DetailedReview({
                         <Target className="w-4 h-4 text-white" />
                       </div>
                       <div>
-                        <h4 className="font-medium text-blue-900 mb-2">Explanation:</h4>
+                        <h4 className="font-medium text-blue-900 mb-2">General Explanation:</h4>
                         <p className="text-blue-800 text-sm leading-relaxed">
                           {feedback.explanation}
                         </p>
