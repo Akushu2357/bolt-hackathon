@@ -218,8 +218,22 @@ export default function QuizResultsPage() {
       // Add insights from grading results if available
       if (gradingResults && gradingResults.length > 0) {
         const partialCredits = gradingResults.filter(r => r.grade === 'partial').length;
+        const incorrectOpenEnded = gradingResults.filter(r => r.grade === 'incorrect').length;
+        const correctOpenEnded = gradingResults.filter(r => r.grade === 'correct').length;
+        
         if (partialCredits > 0) {
           analysis += ` You received partial credit on ${partialCredits} open-ended question(s), showing good understanding that can be improved with more detail and clarity.`;
+        }
+        
+        if (correctOpenEnded > 0) {
+          analysis += ` Your ${correctOpenEnded} fully correct open-ended answer(s) demonstrate strong analytical and communication skills.`;
+        }
+        
+        // Extract common weak areas from AI grading
+        const allWeakAreas = gradingResults.flatMap(r => r.weakAreas || []);
+        const uniqueWeakAreas = [...new Set(allWeakAreas)];
+        if (uniqueWeakAreas.length > 0) {
+          analysis += ` Key areas to focus on: ${uniqueWeakAreas.slice(0, 3).join(', ')}.`;
         }
       }
 
@@ -267,7 +281,7 @@ export default function QuizResultsPage() {
     );
   }
 
-  const { quiz, selectedAnswers } = state;
+  const { quiz, selectedAnswers, gradingResults } = state;
   const correctCount = quiz.questions.filter((_, index) => isAnswerCorrect(index)).length;
   const actualScore = Math.round((correctCount / quiz.questions.length) * 100);
 
@@ -290,6 +304,79 @@ export default function QuizResultsPage() {
             <p className="text-gray-600">{quiz.topic} • {quiz.difficulty} difficulty</p>
           </div>
         </div>
+
+        {/* AI Grading Summary for Open-Ended Questions */}
+        {gradingResults && gradingResults.length > 0 && (
+          <div className="mb-6 sm:mb-8">
+            <div className="bg-gradient-to-br from-indigo-50 via-white to-purple-50 rounded-xl shadow-lg border border-indigo-200 p-4 sm:p-6 relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 to-purple-500/5 pointer-events-none"></div>
+              <div className="relative">
+                <div className="flex items-center mb-4">
+                  <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center mr-3">
+                    <Brain className="w-5 h-5 text-white" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900">AI Grading Summary</h2>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <div className="text-center p-3 bg-green-50 rounded-lg border border-green-200">
+                    <div className="text-lg font-bold text-green-600">
+                      {gradingResults.filter(r => r.grade === 'correct').length}
+                    </div>
+                    <div className="text-sm text-green-700">Fully Correct</div>
+                  </div>
+                  <div className="text-center p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                    <div className="text-lg font-bold text-yellow-600">
+                      {gradingResults.filter(r => r.grade === 'partial').length}
+                    </div>
+                    <div className="text-sm text-yellow-700">Partial Credit</div>
+                  </div>
+                  <div className="text-center p-3 bg-red-50 rounded-lg border border-red-200">
+                    <div className="text-lg font-bold text-red-600">
+                      {gradingResults.filter(r => r.grade === 'incorrect').length}
+                    </div>
+                    <div className="text-sm text-red-700">Needs Work</div>
+                  </div>
+                </div>
+
+                {/* Overall Improvements */}
+                {gradingResults.some(r => r.improvements && r.improvements.length > 0) && (
+                  <div className="mb-4">
+                    <h3 className="text-sm font-medium text-indigo-900 mb-2 flex items-center">
+                      <Lightbulb className="w-4 h-4 mr-1" />
+                      Key Improvement Areas:
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {[...new Set(gradingResults.flatMap(r => r.improvements || []))].slice(0, 5).map((improvement, idx) => (
+                        <span key={idx} className="text-xs px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full">
+                          {improvement}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Weak Areas */}
+                {gradingResults.some(r => r.weakAreas && r.weakAreas.length > 0) && (
+                  <div>
+                    <h3 className="text-sm font-medium text-purple-900 mb-2 flex items-center">
+                      <Target className="w-4 h-4 mr-1" />
+                      Concepts to Review:
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {[...new Set(gradingResults.flatMap(r => r.weakAreas || []))].slice(0, 5).map((area, idx) => (
+                        <span key={idx} className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded-full">
+                          {area}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+        
         <div className="flex flex-col lg:flex-row gap-6 sm:gap-8">
           {/* Main Content */}
           <div className="flex-1">
@@ -312,7 +399,7 @@ export default function QuizResultsPage() {
                 isAnswerCorrect={isAnswerCorrect}
                 expandedQuestion={expandedQuestion}
                 setExpandedQuestion={setExpandedQuestion}
-                gradingResults={state.gradingResults}
+                gradingResults={gradingResults}
               />
             )}
             <Recommendations actualScore={actualScore} quizTopic={quiz.topic} />
