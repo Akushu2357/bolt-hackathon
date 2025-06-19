@@ -281,9 +281,11 @@ export default function QuizResultsPage() {
     );
   }
 
-  const { quiz, selectedAnswers, gradingResults } = state;
+  const { quiz, selectedAnswers, gradingResults, score: originalScore } = state;
   const correctCount = quiz.questions.filter((_, index) => isAnswerCorrect(index)).length;
-  const actualScore = Math.round((correctCount / quiz.questions.length) * 100);
+  
+  // Use the original score from the quiz attempt (which includes AI grading) instead of recalculating
+  const actualScore = originalScore || Math.round((correctCount / quiz.questions.length) * 100);
 
   return (
     <div className="min-h-screen bg-gray-50">
