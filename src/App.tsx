@@ -2,14 +2,14 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { useAuth } from './contexts/AuthContext';
-import Layout from './components/Layout';
+import Layout from './components/QuizResultsPage/Layout';
 import AuthPage from './pages/AuthPage';
 import HomePage from './pages/HomePage';
 import ChatPage from './pages/ChatPage';
 import QuizPage from './pages/QuizPage';
 import QuizResultsPage from './pages/QuizResultsPage';
 import ProfilePage from './pages/ProfilePage';
-import LoadingSpinner from './components/LoadingSpinner';
+import LoadingSpinner from './components/QuizResultsPage/LoadingSpinner';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
