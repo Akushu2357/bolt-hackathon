@@ -482,6 +482,8 @@ export default function QuizPage() {
               setNewQuizTopic('');
               setNewQuizDifficulty('medium');
             }}
+            settings={quizSettings}
+            onSettingsChange={setQuizSettings}
           />
         )}
 

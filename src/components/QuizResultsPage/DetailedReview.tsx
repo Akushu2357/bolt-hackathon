@@ -1,16 +1,34 @@
 import React from 'react';
 import { BookOpen, CheckCircle, XCircle, Target } from 'lucide-react';
-import type { Question } from '../../pages/QuizResultsPage';
+import { QuizScoringService } from '../../services/quizScoringService';
+import { GradedQuestion } from '../../services/gradingService';
+
+interface Question {
+  id: string;
+  type: 'single' | 'multiple' | 'true_false' | 'open_ended';
+  question: string;
+  options?: string[];
+  explanation: string;
+  correct_answer: number[] | string | boolean;
+}
 
 interface DetailedReviewProps {
   quizQuestions: Question[];
-  selectedAnswers: (number[] | string)[];
+  selectedAnswers: (number[] | string | boolean)[];
   isAnswerCorrect: (index: number) => boolean;
   expandedQuestion: number | null;
   setExpandedQuestion: (index: number | null) => void;
+  gradingResults?: GradedQuestion[];
 }
 
-export default function DetailedReview({ quizQuestions, selectedAnswers, isAnswerCorrect, expandedQuestion, setExpandedQuestion }: DetailedReviewProps) {
+export default function DetailedReview({ 
+  quizQuestions, 
+  selectedAnswers, 
+  isAnswerCorrect, 
+  expandedQuestion, 
+  setExpandedQuestion,
+  gradingResults 
+}: DetailedReviewProps) {
   return (
     <div className="card">
       <div className="flex items-center mb-6">
@@ -22,6 +40,8 @@ export default function DetailedReview({ quizQuestions, selectedAnswers, isAnswe
           const isCorrect = isAnswerCorrect(index);
           const userAnswer = selectedAnswers[index];
           const isExpanded = expandedQuestion === index;
+          const feedback = QuizScoringService.getAnswerFeedback(question, userAnswer, gradingResults);
+          
           return (
             <div key={question.id} className="border border-gray-200 rounded-lg overflow-hidden">
               <div 
@@ -45,6 +65,11 @@ export default function DetailedReview({ quizQuestions, selectedAnswers, isAnswe
                         <span className="text-sm font-medium">
                           {isCorrect ? 'Correct' : 'Incorrect'}
                         </span>
+                        {feedback.score !== undefined && (
+                          <span className="text-sm ml-2 px-2 py-1 bg-gray-100 rounded">
+                            Score: {Math.round(feedback.score * 100)}%
+                          </span>
+                        )}
                       </div>
                     </div>
                     <h3 className="text-lg font-medium text-gray-900 mb-2">
@@ -66,13 +91,15 @@ export default function DetailedReview({ quizQuestions, selectedAnswers, isAnswe
               </div>
               {isExpanded && (
                 <div className="border-t border-gray-200 p-4 sm:p-6 bg-white">
+                  {/* Show answer options for multiple choice questions */}
                   {question.options && (
                     <div className="mb-4">
                       <h4 className="font-medium text-gray-900 mb-3">Answer Options:</h4>
                       <div className="space-y-2">
                         {question.options.map((option, optionIndex) => {
                           const isUserSelected = Array.isArray(userAnswer) && userAnswer.includes(optionIndex);
-                          const isCorrectOption = question.correct_answer.includes(optionIndex);
+                          const isCorrectOption = Array.isArray(question.correct_answer) && 
+                                                question.correct_answer.includes(optionIndex);
                           return (
                             <div
                               key={optionIndex}
@@ -107,7 +134,29 @@ export default function DetailedReview({ quizQuestions, selectedAnswers, isAnswe
                       </div>
                     </div>
                   )}
-                  {question.type === 'open_answer' && (
+
+                  {/* Show true/false answers */}
+                  {question.type === 'true_false' && (
+                    <div className="mb-4">
+                      <h4 className="font-medium text-gray-900 mb-2">Your Answer:</h4>
+                      <div className="p-3 bg-gray-50 rounded-lg border">
+                        <p className="text-gray-800">
+                          {typeof userAnswer === 'boolean' ? (userAnswer ? 'True' : 'False') : 'No answer provided'}
+                        </p>
+                      </div>
+                      <h4 className="font-medium text-gray-900 mb-2 mt-3">Correct Answer:</h4>
+                      <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                        <p className="text-green-800">
+                          {typeof question.correct_answer === 'boolean' ? 
+                            (question.correct_answer ? 'True' : 'False') : 
+                            String(question.correct_answer)}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Show open-ended answers */}
+                  {question.type === 'open_ended' && (
                     <div className="mb-4">
                       <h4 className="font-medium text-gray-900 mb-2">Your Answer:</h4>
                       <div className="p-3 bg-gray-50 rounded-lg border">
@@ -115,8 +164,37 @@ export default function DetailedReview({ quizQuestions, selectedAnswers, isAnswe
                           {typeof userAnswer === 'string' ? userAnswer : 'No answer provided'}
                         </p>
                       </div>
+                      {typeof question.correct_answer === 'string' && (
+                        <>
+                          <h4 className="font-medium text-gray-900 mb-2 mt-3">Model Answer:</h4>
+                          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                            <p className="text-blue-800 text-sm">
+                              {question.correct_answer}
+                            </p>
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
+
+                  {/* Show improvements for open-ended questions */}
+                  {feedback.improvements && feedback.improvements.length > 0 && (
+                    <div className="mb-4">
+                      <h4 className="font-medium text-orange-700 mb-2 flex items-center">
+                        <Target className="w-4 h-4 mr-1" />
+                        Suggestions for Improvement:
+                      </h4>
+                      <ul className="space-y-1">
+                        {feedback.improvements.map((improvement, idx) => (
+                          <li key={idx} className="text-sm text-orange-600 bg-orange-50 px-2 py-1 rounded">
+                            • {improvement}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Show explanation */}
                   <div className="bg-gradient-to-br from-blue-50 via-white to-indigo-50 border border-blue-200 rounded-lg p-4 relative overflow-hidden">
                     <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-indigo-500/5 pointer-events-none"></div>
                     <div className="relative flex items-start">
@@ -126,7 +204,7 @@ export default function DetailedReview({ quizQuestions, selectedAnswers, isAnswe
                       <div>
                         <h4 className="font-medium text-blue-900 mb-2">Explanation:</h4>
                         <p className="text-blue-800 text-sm leading-relaxed">
-                          {question.explanation}
+                          {feedback.explanation}
                         </p>
                       </div>
                     </div>
