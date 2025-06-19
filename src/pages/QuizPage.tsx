@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { 
   Plus, 
@@ -12,7 +13,9 @@ import {
   Target,
   RotateCcw,
   Menu,
-  X
+  X,
+  LogIn,
+  Lock
 } from 'lucide-react';
 
 interface Question {
@@ -46,6 +49,7 @@ interface QuizAttempt {
 
 export default function QuizPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [attempts, setAttempts] = useState<QuizAttempt[]>([]);
   const [currentQuiz, setCurrentQuiz] = useState<Quiz | null>(null);
@@ -57,13 +61,41 @@ export default function QuizPage() {
   const [newQuizTopic, setNewQuizTopic] = useState('');
   const [newQuizDifficulty, setNewQuizDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [showSidebar, setShowSidebar] = useState(false);
+  const [guestQuizzes, setGuestQuizzes] = useState<Quiz[]>([]);
+  const [showAnswersBlocked, setShowAnswersBlocked] = useState(false);
 
   useEffect(() => {
     if (user) {
       fetchQuizzes();
       fetchAttempts();
+    } else {
+      // Load guest quizzes
+      loadGuestQuizzes();
     }
   }, [user]);
+
+  const loadGuestQuizzes = () => {
+    // Create some sample quizzes for guest users
+    const sampleQuizzes: Quiz[] = [
+      {
+        id: 'guest-1',
+        title: 'Basic Mathematics Quiz',
+        topic: 'Mathematics',
+        difficulty: 'easy',
+        questions: generateMockQuestions('Mathematics', 'easy'),
+        created_at: new Date().toISOString()
+      },
+      {
+        id: 'guest-2',
+        title: 'Science Fundamentals',
+        topic: 'Science',
+        difficulty: 'medium',
+        questions: generateMockQuestions('Science', 'medium'),
+        created_at: new Date().toISOString()
+      }
+    ];
+    setGuestQuizzes(sampleQuizzes);
+  };
 
   const fetchQuizzes = async () => {
     try {
@@ -106,21 +138,34 @@ export default function QuizPage() {
     try {
       const questions: Question[] = generateMockQuestions(newQuizTopic, newQuizDifficulty);
       
-      const { data, error } = await supabase
-        .from('quizzes')
-        .insert({
-          user_id: user!.id,
+      if (user) {
+        const { data, error } = await supabase
+          .from('quizzes')
+          .insert({
+            user_id: user.id,
+            title: `${newQuizTopic} Quiz`,
+            topic: newQuizTopic,
+            difficulty: newQuizDifficulty,
+            questions: questions
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        setQuizzes([data, ...quizzes]);
+      } else {
+        // For guest users, add to local state
+        const newQuiz: Quiz = {
+          id: `guest-${Date.now()}`,
           title: `${newQuizTopic} Quiz`,
           topic: newQuizTopic,
           difficulty: newQuizDifficulty,
-          questions: questions
-        })
-        .select()
-        .single();
+          questions: questions,
+          created_at: new Date().toISOString()
+        };
+        setGuestQuizzes([newQuiz, ...guestQuizzes]);
+      }
 
-      if (error) throw error;
-
-      setQuizzes([data, ...quizzes]);
       setShowCreateForm(false);
       setNewQuizTopic('');
     } catch (error) {
@@ -169,7 +214,6 @@ export default function QuizPage() {
   const startQuiz = (quiz: Quiz) => {
     setCurrentQuiz(quiz);
     setCurrentQuestionIndex(0);
-    // Initialize answers based on question type
     const initialAnswers = quiz.questions.map(question => 
       question.type === 'open_answer' ? '' : []
     );
@@ -217,12 +261,19 @@ export default function QuizPage() {
 
     const score = calculateScore();
     
+    if (!user) {
+      // For guest users, show results but block detailed analysis
+      setShowResults(true);
+      setShowAnswersBlocked(true);
+      return;
+    }
+
     try {
       await supabase
         .from('quiz_attempts')
         .insert({
           quiz_id: currentQuiz.id,
-          user_id: user!.id,
+          user_id: user.id,
           answers: selectedAnswers,
           score: score
         });
@@ -244,10 +295,9 @@ export default function QuizPage() {
 
     currentQuiz.questions.forEach((question, index) => {
       if (question.type === 'open_answer') {
-        // For open answers, give partial credit if answer exists
         const answer = selectedAnswers[index];
         if (typeof answer === 'string' && answer.trim().length > 0) {
-          correct += 0.5; // Give 50% credit for attempting open answer
+          correct += 0.5;
         }
       } else {
         totalQuestions++;
@@ -273,7 +323,7 @@ export default function QuizPage() {
   };
 
   const updateLearningProgress = async (score: number) => {
-    if (!currentQuiz) return;
+    if (!currentQuiz || !user) return;
 
     const weakAreas: string[] = [];
     const strengths: string[] = [];
@@ -305,7 +355,7 @@ export default function QuizPage() {
       const { data: existingProgress } = await supabase
         .from('learning_progress')
         .select('*')
-        .eq('user_id', user!.id)
+        .eq('user_id', user.id)
         .eq('topic', currentQuiz.topic)
         .single();
 
@@ -323,7 +373,7 @@ export default function QuizPage() {
         await supabase
           .from('learning_progress')
           .insert({
-            user_id: user!.id,
+            user_id: user.id,
             topic: currentQuiz.topic,
             weak_areas: weakAreas,
             strengths: strengths,
@@ -340,6 +390,7 @@ export default function QuizPage() {
     setCurrentQuestionIndex(0);
     setSelectedAnswers([]);
     setShowResults(false);
+    setShowAnswersBlocked(false);
   };
 
   const getDifficultyColor = (difficulty: string) => {
@@ -448,6 +499,8 @@ export default function QuizPage() {
     }
   };
 
+  const availableQuizzes = user ? quizzes : guestQuizzes;
+
   if (currentQuiz && !showResults) {
     const currentQuestion = currentQuiz.questions[currentQuestionIndex];
     const progress = ((currentQuestionIndex + 1) / currentQuiz.questions.length) * 100;
@@ -536,7 +589,7 @@ export default function QuizPage() {
   if (showResults && currentQuiz) {
     const score = calculateScore();
     const correctAnswers = currentQuiz.questions.filter((q, index) => {
-      if (q.type === 'open_answer') return true; // Count open answers as correct if attempted
+      if (q.type === 'open_answer') return true;
       const userAnswer = selectedAnswers[index] as number[];
       const correctAnswer = q.correct_answer;
       
@@ -564,6 +617,25 @@ export default function QuizPage() {
                 You scored {score}% ({correctAnswers}/{currentQuiz.questions.length})
               </p>
             </div>
+
+            {showAnswersBlocked && (
+              <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="flex items-center justify-center mb-2">
+                  <Lock className="w-5 h-5 text-yellow-600 mr-2" />
+                  <h3 className="text-lg font-semibold text-yellow-800">Detailed Analysis Locked</h3>
+                </div>
+                <p className="text-yellow-700 mb-4">
+                  Login to view detailed quiz analysis, track your progress, and access unlimited quizzes!
+                </p>
+                <button
+                  onClick={() => navigate('/auth')}
+                  className="btn-primary flex items-center justify-center space-x-2 mx-auto"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span>Login for Full Access</span>
+                </button>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
               <div className="text-center p-4 bg-green-50 rounded-lg">
@@ -610,9 +682,20 @@ export default function QuizPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 sm:mb-8 space-y-4 sm:space-y-0">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Quizzes</h1>
-            <p className="text-gray-600">Test your knowledge and track your progress</p>
+            <p className="text-gray-600">
+              {user ? 'Test your knowledge and track your progress' : 'Test your knowledge - Login for detailed analysis'}
+            </p>
           </div>
           <div className="flex space-x-3">
+            {!user && (
+              <button
+                onClick={() => navigate('/auth')}
+                className="btn-secondary flex items-center space-x-2"
+              >
+                <LogIn className="w-4 h-4" />
+                <span className="hidden sm:inline">Login</span>
+              </button>
+            )}
             <button
               onClick={() => setShowSidebar(!showSidebar)}
               className="btn-secondary lg:hidden"
@@ -684,7 +767,7 @@ export default function QuizPage() {
           {/* Main Content */}
           <div className="flex-1">
             <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">Available Quizzes</h2>
-            {quizzes.length === 0 ? (
+            {availableQuizzes.length === 0 ? (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 sm:p-12 text-center">
                 <BookOpen className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No quizzes yet</h3>
@@ -700,7 +783,7 @@ export default function QuizPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {quizzes.map((quiz) => (
+                {availableQuizzes.map((quiz) => (
                   <div key={quiz.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow duration-200">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-4 sm:space-y-0">
                       <div className="flex-1 min-w-0">
@@ -716,6 +799,12 @@ export default function QuizPage() {
                             <Clock className="w-4 h-4 mr-1" />
                             {quiz.questions.length} questions
                           </span>
+                          {!user && (
+                            <span className="flex items-center text-yellow-600">
+                              <Lock className="w-4 h-4 mr-1" />
+                              Limited analysis
+                            </span>
+                          )}
                         </div>
                       </div>
                       <button
@@ -732,58 +821,60 @@ export default function QuizPage() {
             )}
           </div>
 
-          {/* Sidebar */}
-          <div className={`lg:w-80 ${showSidebar ? 'block' : 'hidden lg:block'}`}>
-            {showSidebar && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden" onClick={() => setShowSidebar(false)}></div>
-            )}
-            <div className={`${showSidebar ? 'fixed right-0 top-0 h-full w-80 bg-white z-50 p-4 overflow-y-auto lg:relative lg:z-auto lg:p-0 lg:bg-transparent' : ''}`}>
+          {/* Sidebar - Only show for logged-in users */}
+          {user && (
+            <div className={`lg:w-80 ${showSidebar ? 'block' : 'hidden lg:block'}`}>
               {showSidebar && (
-                <div className="flex justify-between items-center mb-4 lg:hidden">
-                  <h3 className="text-lg font-semibold">Recent Attempts</h3>
-                  <button onClick={() => setShowSidebar(false)}>
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
+                <div className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden" onClick={() => setShowSidebar(false)}></div>
               )}
-              
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4 hidden lg:block">Recent Attempts</h2>
-                {attempts.length === 0 ? (
-                  <div className="text-center py-6 sm:py-8">
-                    <Target className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 mx-auto mb-2" />
-                    <p className="text-gray-600 text-sm">No attempts yet</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {attempts.map((attempt) => (
-                      <div key={attempt.id} className="bg-gray-50 rounded-lg p-3 sm:p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-medium text-gray-900 text-sm truncate flex-1 mr-2">
-                            {attempt.quiz.title}
-                          </h4>
-                          <div className={`flex items-center ${
-                            attempt.score >= 80 ? 'text-green-600' : 
-                            attempt.score >= 60 ? 'text-yellow-600' : 'text-red-600'
-                          }`}>
-                            {attempt.score >= 80 ? (
-                              <CheckCircle className="w-4 h-4 mr-1" />
-                            ) : (
-                              <XCircle className="w-4 h-4 mr-1" />
-                            )}
-                            <span className="text-sm font-medium">{attempt.score}%</span>
-                          </div>
-                        </div>
-                        <p className="text-xs text-gray-500">
-                          {new Date(attempt.completed_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                    ))}
+              <div className={`${showSidebar ? 'fixed right-0 top-0 h-full w-80 bg-white z-50 p-4 overflow-y-auto lg:relative lg:z-auto lg:p-0 lg:bg-transparent' : ''}`}>
+                {showSidebar && (
+                  <div className="flex justify-between items-center mb-4 lg:hidden">
+                    <h3 className="text-lg font-semibold">Recent Attempts</h3>
+                    <button onClick={() => setShowSidebar(false)}>
+                      <X className="w-5 h-5" />
+                    </button>
                   </div>
                 )}
+                
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+                  <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4 hidden lg:block">Recent Attempts</h2>
+                  {attempts.length === 0 ? (
+                    <div className="text-center py-6 sm:py-8">
+                      <Target className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 mx-auto mb-2" />
+                      <p className="text-gray-600 text-sm">No attempts yet</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {attempts.map((attempt) => (
+                        <div key={attempt.id} className="bg-gray-50 rounded-lg p-3 sm:p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-medium text-gray-900 text-sm truncate flex-1 mr-2">
+                              {attempt.quiz.title}
+                            </h4>
+                            <div className={`flex items-center ${
+                              attempt.score >= 80 ? 'text-green-600' : 
+                              attempt.score >= 60 ? 'text-yellow-600' : 'text-red-600'
+                            }`}>
+                              {attempt.score >= 80 ? (
+                                <CheckCircle className="w-4 h-4 mr-1" />
+                              ) : (
+                                <XCircle className="w-4 h-4 mr-1" />
+                              )}
+                              <span className="text-sm font-medium">{attempt.score}%</span>
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            {new Date(attempt.completed_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
