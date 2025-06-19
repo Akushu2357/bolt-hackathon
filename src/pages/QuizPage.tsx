@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
 import { 
   Plus, 
   Play, 
@@ -20,14 +19,18 @@ import QuizQuestion from '../components/QuizPage/QuizQuestion';
 import QuizList from '../components/QuizPage/QuizList';
 import CreateQuizForm from '../components/QuizPage/CreateQuizForm';
 import RecentAttemptsSidebar from '../components/QuizPage/RecentAttemptsSidebar';
+import { QuizService, QuizSettings } from '../services/quizService';
+import { QuizDataService } from '../services/quizDataService';
+import { QuizScoringService } from '../services/quizScoringService';
+import { LearningProgressService } from '../services/learningProgressService';
 
 interface Question {
   id: string;
-  type: 'single' | 'multiple' | 'true_false' | 'open_answer';
+  type: 'single' | 'multiple' | 'true_false' | 'open_ended';
   question: string;
   options?: string[];
   explanation: string;
-  correct_answer: number[];
+  correct_answer: number[] | string | boolean;
 }
 
 interface Quiz {
@@ -58,12 +61,21 @@ export default function QuizPage() {
   const [attempts, setAttempts] = useState<QuizAttempt[]>([]);
   const [currentQuiz, setCurrentQuiz] = useState<Quiz | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [selectedAnswers, setSelectedAnswers] = useState<(number[] | string)[]>([]);
+  const [selectedAnswers, setSelectedAnswers] = useState<(number[] | string | boolean)[]>([]);
   const [loading, setLoading] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newQuizTopic, setNewQuizTopic] = useState('');
   const [newQuizDifficulty, setNewQuizDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [showSidebar, setShowSidebar] = useState(false);
+  const [quizSettings, setQuizSettings] = useState<QuizSettings>({
+    numberOfQuestions: 5,
+    numberOfChoices: 4,
+    questionTypes: {
+      multipleChoice: true,
+      trueFalse: false,
+      openEnded: false
+    }
+  });
 
   useEffect(() => {
     if (user) {
@@ -82,113 +94,75 @@ export default function QuizPage() {
   }, [location.state, navigate]);
 
   const fetchQuizzes = async () => {
+    if (!user) return;
     try {
-      const { data, error } = await supabase
-        .from('quizzes')
-        .select('*')
-        .eq('user_id', user!.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setQuizzes(data || []);
+      const data = await QuizDataService.fetchQuizzes(user);
+      setQuizzes(data);
     } catch (error) {
       console.error('Error fetching quizzes:', error);
     }
   };
 
   const fetchAttempts = async () => {
+    if (!user) return;
     try {
-      const { data, error } = await supabase
-        .from('quiz_attempts')
-        .select(`
-          *,
-          quiz:quizzes(title, topic)
-        `)
-        .eq('user_id', user!.id)
-        .order('completed_at', { ascending: false })
-        .limit(5);
-
-      if (error) throw error;
-      setAttempts(data || []);
+      const data = await QuizDataService.fetchAttempts(user);
+      setAttempts(data);
     } catch (error) {
       console.error('Error fetching attempts:', error);
     }
   };
 
   const generateQuiz = async () => {
-    if (!newQuizTopic.trim()) return;
+    if (!newQuizTopic.trim() || !user) return;
 
     setLoading(true);
     try {
-      const questions: Question[] = generateMockQuestions(newQuizTopic, newQuizDifficulty);
+      // Get user's weak areas for this topic to focus on
+      const weakAreas = await QuizService.getUserWeakAreas(user.id, newQuizTopic);
       
-      const { data, error } = await supabase
-        .from('quizzes')
-        .insert({
-          user_id: user!.id,
-          title: `${newQuizTopic} Quiz`,
-          topic: newQuizTopic,
-          difficulty: newQuizDifficulty,
-          questions: questions
-        })
-        .select()
-        .single();
+      // Generate questions using the quiz service
+      const response = await QuizService.generateQuestions({
+        topic: newQuizTopic,
+        difficulty: newQuizDifficulty,
+        contexts: weakAreas.slice(0, 3), // Use top 3 weak areas as context
+        settings: quizSettings
+      });
 
-      if (error) throw error;
+      // Save the quiz to database
+      const savedQuiz = await QuizDataService.saveQuiz(
+        user.id,
+        `${newQuizTopic} Quiz`,
+        newQuizTopic,
+        newQuizDifficulty,
+        response.questions
+      );
 
-      setQuizzes([data, ...quizzes]);
+      setQuizzes([savedQuiz, ...quizzes]);
       setShowCreateForm(false);
       setNewQuizTopic('');
     } catch (error) {
       console.error('Error generating quiz:', error);
+      // You might want to show an error message to the user here
     } finally {
       setLoading(false);
     }
-  };
-
-  const generateMockQuestions = (topic: string, difficulty: string): Question[] => {
-    return [
-      {
-        id: 'q1',
-        type: 'single',
-        question: `What is the most fundamental concept in ${topic}?`,
-        options: ['Basic principle A', 'Basic principle B', 'Basic principle C', 'Basic principle D'],
-        correct_answer: [0],
-        explanation: `This is the correct answer because it represents the core principle of ${topic}.`
-      },
-      {
-        id: 'q2',
-        type: 'multiple',
-        question: `Which of the following are important aspects of ${topic}? (Select all that apply)`,
-        options: ['Aspect A', 'Aspect B', 'Aspect C', 'Aspect D'],
-        correct_answer: [0, 2],
-        explanation: `Aspects A and C are both crucial components of ${topic}.`
-      },
-      {
-        id: 'q3',
-        type: 'true_false',
-        question: `${topic} is considered a fundamental subject in modern education.`,
-        options: ['True', 'False'],
-        correct_answer: [0],
-        explanation: `This statement is true because ${topic} plays a vital role in education.`
-      },
-      {
-        id: 'q4',
-        type: 'open_answer',
-        question: `Explain in your own words why ${topic} is important in today's world.`,
-        correct_answer: [],
-        explanation: `This is an open-ended question designed to test your understanding and ability to articulate the importance of ${topic}.`
-      }
-    ];
   };
 
   const startQuiz = (quiz: Quiz) => {
     setCurrentQuiz(quiz);
     setCurrentQuestionIndex(0);
     // Initialize answers based on question type
-    const initialAnswers = quiz.questions.map(question => 
-      question.type === 'open_answer' ? '' : []
-    );
+    const initialAnswers = quiz.questions.map(question => {
+      switch (question.type) {
+        case 'open_ended':
+          return '';
+        case 'true_false':
+          return false;
+        default:
+          return [];
+      }
+    });
     setSelectedAnswers(initialAnswers);
     setShowSidebar(false);
   };
@@ -213,6 +187,12 @@ export default function QuizPage() {
     setSelectedAnswers(newAnswers);
   };
 
+  const selectTrueFalseAnswer = (value: boolean) => {
+    const newAnswers = [...selectedAnswers];
+    newAnswers[currentQuestionIndex] = value;
+    setSelectedAnswers(newAnswers);
+  };
+
   const setOpenAnswer = (answer: string) => {
     const newAnswers = [...selectedAnswers];
     newAnswers[currentQuestionIndex] = answer;
@@ -228,133 +208,42 @@ export default function QuizPage() {
   };
 
   const finishQuiz = async () => {
-    if (!currentQuiz) return;
+    if (!currentQuiz || !user) return;
 
-    const score = calculateScore();
-    
     try {
-      await supabase
-        .from('quiz_attempts')
-        .insert({
-          quiz_id: currentQuiz.id,
-          user_id: user!.id,
-          answers: selectedAnswers,
-          score: score
-        });
+      // Calculate score using the scoring service
+      const scoringResult = await QuizScoringService.calculateScore(currentQuiz, selectedAnswers);
+      
+      // Save quiz attempt
+      await QuizDataService.saveQuizAttempt(
+        currentQuiz.id,
+        user.id,
+        selectedAnswers,
+        scoringResult.score
+      );
 
-      await updateLearningProgress(score);
+      // Update learning progress
+      await LearningProgressService.updateLearningProgress(
+        user.id,
+        currentQuiz,
+        selectedAnswers,
+        scoringResult.score,
+        scoringResult.gradingResults
+      );
       
       // Navigate to results page with quiz data
       navigate('/quiz-results', {
         state: {
           quiz: currentQuiz,
           selectedAnswers: selectedAnswers,
-          score: score
+          score: scoringResult.score,
+          gradingResults: scoringResult.gradingResults
         }
       });
       
       fetchAttempts();
     } catch (error) {
-      console.error('Error saving quiz attempt:', error);
-    }
-  };
-
-  const calculateScore = (): number => {
-    if (!currentQuiz) return 0;
-    
-    let correct = 0;
-    let totalQuestions = 0;
-
-    currentQuiz.questions.forEach((question, index) => {
-      if (question.type === 'open_answer') {
-        // For open answers, give partial credit if answer exists
-        const answer = selectedAnswers[index];
-        if (typeof answer === 'string' && answer.trim().length > 0) {
-          correct += 0.5; // Give 50% credit for attempting open answer
-        }
-      } else {
-        totalQuestions++;
-        const userAnswer = selectedAnswers[index] as number[];
-        const correctAnswer = question.correct_answer;
-        
-        if (question.type === 'single' || question.type === 'true_false') {
-          if (userAnswer.length === 1 && userAnswer[0] === correctAnswer[0]) {
-            correct++;
-          }
-        } else if (question.type === 'multiple') {
-          const userSet = new Set(userAnswer);
-          const correctSet = new Set(correctAnswer);
-          if (userSet.size === correctSet.size && 
-              [...userSet].every(x => correctSet.has(x))) {
-            correct++;
-          }
-        }
-      }
-    });
-    
-    return Math.round((correct / Math.max(totalQuestions, currentQuiz.questions.length)) * 100);
-  };
-
-  const updateLearningProgress = async (score: number) => {
-    if (!currentQuiz) return;
-
-    const weakAreas: string[] = [];
-    const strengths: string[] = [];
-
-    currentQuiz.questions.forEach((question, index) => {
-      if (question.type !== 'open_answer') {
-        const userAnswer = selectedAnswers[index] as number[];
-        const correctAnswer = question.correct_answer;
-        let isCorrect = false;
-
-        if (question.type === 'single' || question.type === 'true_false') {
-          isCorrect = userAnswer.length === 1 && userAnswer[0] === correctAnswer[0];
-        } else if (question.type === 'multiple') {
-          const userSet = new Set(userAnswer);
-          const correctSet = new Set(correctAnswer);
-          isCorrect = userSet.size === correctSet.size && 
-                     [...userSet].every(x => correctSet.has(x));
-        }
-
-        if (isCorrect) {
-          strengths.push(`${currentQuiz.topic} - Question ${index + 1}`);
-        } else {
-          weakAreas.push(`${currentQuiz.topic} - Question ${index + 1}`);
-        }
-      }
-    });
-
-    try {
-      const { data: existingProgress } = await supabase
-        .from('learning_progress')
-        .select('*')
-        .eq('user_id', user!.id)
-        .eq('topic', currentQuiz.topic)
-        .single();
-
-      if (existingProgress) {
-        await supabase
-          .from('learning_progress')
-          .update({
-            weak_areas: [...new Set([...existingProgress.weak_areas, ...weakAreas])],
-            strengths: [...new Set([...existingProgress.strengths, ...strengths])],
-            progress_score: Math.max(existingProgress.progress_score, score),
-            last_updated: new Date().toISOString()
-          })
-          .eq('id', existingProgress.id);
-      } else {
-        await supabase
-          .from('learning_progress')
-          .insert({
-            user_id: user!.id,
-            topic: currentQuiz.topic,
-            weak_areas: weakAreas,
-            strengths: strengths,
-            progress_score: score
-          });
-      }
-    } catch (error) {
-      console.error('Error updating learning progress:', error);
+      console.error('Error finishing quiz:', error);
     }
   };
 
@@ -377,10 +266,13 @@ export default function QuizPage() {
     const currentAnswer = selectedAnswers[currentQuestionIndex];
     const currentQuestion = currentQuiz!.questions[currentQuestionIndex];
     
-    if (currentQuestion.type === 'open_answer') {
-      return typeof currentAnswer === 'string' && currentAnswer.trim().length > 0;
-    } else {
-      return Array.isArray(currentAnswer) && currentAnswer.length > 0;
+    switch (currentQuestion.type) {
+      case 'open_ended':
+        return typeof currentAnswer === 'string' && currentAnswer.trim().length > 0;
+      case 'true_false':
+        return typeof currentAnswer === 'boolean';
+      default:
+        return Array.isArray(currentAnswer) && currentAnswer.length > 0;
     }
   };
 
@@ -389,7 +281,6 @@ export default function QuizPage() {
 
     switch (question.type) {
       case 'single':
-      case 'true_false':
         return (
           <div className="space-y-3">
             {question.options?.map((option, index) => (
@@ -450,7 +341,40 @@ export default function QuizPage() {
           </div>
         );
 
-      case 'open_answer':
+      case 'true_false':
+        return (
+          <div className="space-y-3">
+            {['True', 'False'].map((option, index) => {
+              const value = index === 0;
+              return (
+                <button
+                  key={index}
+                  onClick={() => selectTrueFalseAnswer(value)}
+                  className={`w-full text-left p-4 rounded-lg border-2 transition-all duration-200 ${
+                    currentAnswer === value
+                      ? 'border-primary-500 bg-primary-50'
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center">
+                    <div className={`w-6 h-6 rounded-full border-2 mr-3 flex items-center justify-center ${
+                      currentAnswer === value
+                        ? 'border-primary-500 bg-primary-500'
+                        : 'border-gray-300'
+                    }`}>
+                      {currentAnswer === value && (
+                        <div className="w-2 h-2 bg-white rounded-full"></div>
+                      )}
+                    </div>
+                    <span className="text-gray-900">{option}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        );
+
+      case 'open_ended':
         return (
           <div>
             <textarea
