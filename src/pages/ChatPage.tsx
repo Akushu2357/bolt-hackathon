@@ -31,9 +31,9 @@ export default function ChatPage() {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  // useEffect(() => {
+  //   scrollToBottom();
+  // }, [messages]);
 
   useEffect(() => {
     if (currentSession) {
@@ -235,11 +235,11 @@ export default function ChatPage() {
                   <p className="text-sm">No chat sessions yet</p>
                 </div>
               ) : (
-                <div className="p-2">
+                <div className="">
                   {sessions.map((session) => (
                     <div
                       key={session.id}
-                      className={`group flex items-start p-3 rounded-lg cursor-pointer transition-colors duration-200 hover:bg-gray-50 relative ${
+                      className={`group flex items-start p-3 cursor-pointer transition-colors duration-200 hover:bg-gray-50 relative ${
                         currentSession?.id === session.id
                           ? 'bg-primary-50 border-l-4 border-primary-500'
                           : ''
@@ -249,15 +249,6 @@ export default function ChatPage() {
                       <div className="flex-shrink-0 mr-3">
                         <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center relative">
                           <Bot className="w-5 h-5 text-primary-600" />
-                          {session.isOnline ? (
-                            <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white">
-                              <Wifi className="w-2 h-2 text-white absolute top-0 left-0" />
-                            </div>
-                          ) : (
-                            <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-gray-400 rounded-full border-2 border-white">
-                              <WifiOff className="w-2 h-2 text-white absolute top-0 left-0" />
-                            </div>
-                          )}
                         </div>
                       </div>
                       
@@ -283,30 +274,19 @@ export default function ChatPage() {
                         <p className="text-sm text-gray-600 truncate pr-8">
                           {session.lastMessage || 'No messages yet'}
                         </p>
-                        
-                        <div className="flex items-center justify-between mt-1">
-                          <div className="flex items-center space-x-1">
-                            <span className={`w-2 h-2 rounded-full ${
-                              session.isOnline ? 'bg-green-500' : 'bg-gray-400'
-                            }`}></span>
-                            <span className="text-xs text-gray-500">
-                              {session.isOnline ? 'Online' : 'Offline'}
-                            </span>
-                          </div>
-                        </div>
                       </div>
 
                       {/* Dropdown Menu */}
                       <div className="absolute top-2 right-2">
                         <button
                           onClick={(e) => toggleDropdown(session.id, e)}
-                          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded transition-all duration-200"
+                          className="p-1 mt-8 rounded transition-all duration-200"
                         >
                           <MoreVertical className="w-4 h-4 text-gray-500" />
                         </button>
                         
                         {activeDropdown === session.id && (
-                          <div className="absolute right-0 top-8 w-32 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                          <div className="absolute right-0 top-8 w-32 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -378,17 +358,11 @@ export default function ChatPage() {
                   <div className="flex items-center space-x-3">
                     <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center relative">
                       <Bot className="w-4 h-4 text-primary-600" />
-                      {currentSession.isOnline && (
-                        <div className="absolute -bottom-1 -right-1 w-2 h-2 bg-green-500 rounded-full"></div>
-                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-gray-900 truncate">
                         {currentSession.title}
                       </h3>
-                      <p className="text-sm text-gray-500">
-                        {currentSession.isOnline ? 'Online' : 'Last seen recently'}
-                      </p>
                     </div>
                   </div>
                 </div>
@@ -425,27 +399,22 @@ export default function ChatPage() {
                               )}
                             </div>
                           </div>
-                          <div className={`px-3 py-2 sm:px-4 sm:py-2 rounded-lg ${
+                          <div className={`max-w-[75%] px-3 py-2 sm:px-4 sm:py-2 rounded-lg ${
                             message.role === 'user'
                               ? 'bg-primary-600 text-white'
                               : 'bg-gray-100 text-gray-900'
                           }`}>
                             <p className="whitespace-pre-wrap text-sm sm:text-base">{message.content}</p>
-                            <div className={`flex items-center justify-between mt-1 space-x-2 ${
+                          </div>
+                          {/* <div className={`flex items-center justify-between mt-1 me-2 ms-2 space-x-2 ${
                               message.role === 'user' ? 'flex-row-reverse' : 'flex-row'
                             }`}>
-                              <span className={`text-xs ${
-                                message.role === 'user' ? 'text-primary-200' : 'text-gray-500'
+                              <span className={`text-xs mt-9 ${
+                                message.role === 'user' ? 'text-gray-500' : 'text-gray-500'
                               }`}>
                                 {getMessageTime(message.timestamp)}
                               </span>
-                              {message.role === 'user' && (
-                                <div className="flex items-center">
-                                  {getStatusIcon(message.status)}
-                                </div>
-                              )}
-                            </div>
-                          </div>
+                          </div> */}
                         </div>
                       </div>
                     ))
@@ -478,7 +447,7 @@ export default function ChatPage() {
                       value={inputMessage}
                       onChange={(e) => setInputMessage(e.target.value)}
                       onKeyPress={handleKeyPress}
-                      placeholder="Type your message here... (Mock interface - messages won't be saved)"
+                      placeholder="Type your message here.."
                       className="flex-1 resize-none input-field text-sm sm:text-base"
                       rows={1}
                       disabled={loading}
@@ -491,9 +460,6 @@ export default function ChatPage() {
                       <Send className="w-4 h-4" />
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    This is a mock interface. Messages are not saved and will reset on page refresh.
-                  </p>
                 </div>
               </>
             ) : (
