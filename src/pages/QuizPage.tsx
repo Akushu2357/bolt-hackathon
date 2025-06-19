@@ -15,6 +15,11 @@ import {
   Menu,
   X
 } from 'lucide-react';
+import QuizHeader from '../components/QuizPage/QuizHeader';
+import QuizQuestion from '../components/QuizPage/QuizQuestion';
+import QuizList from '../components/QuizPage/QuizList';
+import CreateQuizForm from '../components/QuizPage/CreateQuizForm';
+import RecentAttemptsSidebar from '../components/QuizPage/RecentAttemptsSidebar';
 
 interface Question {
   id: string;
@@ -474,58 +479,20 @@ export default function QuizPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200">
             {/* Quiz Header */}
-            <div className="p-4 sm:p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between mb-4">
-                <div className="min-w-0 flex-1">
-                  <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">
-                    {currentQuiz.title}
-                  </h1>
-                  <p className="text-sm sm:text-base text-gray-600">
-                    Question {currentQuestionIndex + 1} of {currentQuiz.questions.length}
-                  </p>
-                </div>
-                <button
-                  onClick={resetQuiz}
-                  className="btn-secondary text-sm px-3 py-2 sm:px-4 sm:py-2"
-                >
-                  <span className="hidden sm:inline">Exit Quiz</span>
-                  <X className="w-4 h-4 sm:hidden" />
-                </button>
-              </div>
-
-              {/* Progress Bar */}
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-primary-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${progress}%` }}
-                ></div>
-              </div>
-            </div>
-
+            <QuizHeader
+              title={currentQuiz.title}
+              current={currentQuestionIndex + 1}
+              total={currentQuiz.questions.length}
+              progress={progress}
+              onExit={resetQuiz}
+            />
             {/* Question Content */}
             <div className="p-4 sm:p-6">
-              <div className="mb-6 sm:mb-8">
-                <div className="flex items-start space-x-3 mb-4">
-                  <div className={`px-2 py-1 rounded text-xs font-medium ${
-                    currentQuestion.type === 'single' ? 'bg-blue-100 text-blue-700' :
-                    currentQuestion.type === 'multiple' ? 'bg-green-100 text-green-700' :
-                    currentQuestion.type === 'true_false' ? 'bg-purple-100 text-purple-700' :
-                    'bg-orange-100 text-orange-700'
-                  }`}>
-                    {currentQuestion.type === 'single' ? 'Single Choice' :
-                     currentQuestion.type === 'multiple' ? 'Multiple Choice' :
-                     currentQuestion.type === 'true_false' ? 'True/False' :
-                     'Open Answer'}
-                  </div>
-                </div>
-                
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-6">
-                  {currentQuestion.question}
-                </h2>
-
-                {renderQuestionInput(currentQuestion)}
-              </div>
-
+              <QuizQuestion
+                question={currentQuestion}
+                currentAnswer={selectedAnswers[currentQuestionIndex]}
+                renderInput={renderQuestionInput}
+              />
               {/* Navigation */}
               <div className="flex flex-col sm:flex-row justify-between space-y-3 sm:space-y-0 sm:space-x-4">
                 <button
@@ -579,86 +546,19 @@ export default function QuizPage() {
 
         {/* Create Quiz Form */}
         {showCreateForm && (
-          <div className="bg-gradient-to-br from-primary-50 via-white to-primary-100 rounded-xl shadow-lg border border-primary-200 p-4 sm:p-6 mb-6 sm:mb-8 relative overflow-hidden">
-            {/* Gradient overlay */}
-            <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 to-blue-500/5 pointer-events-none"></div>
-            
-            <div className="relative">
-              <div className="flex items-center mb-4">
-                <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-600 rounded-lg flex items-center justify-center mr-3">
-                  <Plus className="w-5 h-5 text-white" />
-                </div>
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Generate New Quiz</h2>
-              </div>
-              
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Topic
-                    </label>
-                    <input
-                      type="text"
-                      value={newQuizTopic}
-                      onChange={(e) => setNewQuizTopic(e.target.value)}
-                      placeholder="e.g., Mathematics, Physics, History"
-                      className="input-field bg-white/80 backdrop-blur-sm border-primary-200 focus:border-primary-400 focus:ring-primary-200"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Difficulty
-                    </label>
-                    <div className="relative">
-                      <select
-                        value={newQuizDifficulty}
-                        onChange={(e) => setNewQuizDifficulty(e.target.value as 'easy' | 'medium' | 'hard')}
-                        className="input-field appearance-none pr-10 bg-white/80 backdrop-blur-sm border-primary-200 focus:border-primary-400 focus:ring-primary-200"
-                      >
-                        <option value="easy">Easy</option>
-                        <option value="medium">Medium</option>
-                        <option value="hard">Hard</option>
-                      </select>
-                      <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 pt-2">
-                  <button
-                    onClick={generateQuiz}
-                    disabled={!newQuizTopic.trim() || loading}
-                    className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-lg"
-                  >
-                    {loading ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        <span>Generating...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="w-4 h-4" />
-                        <span>Generate Quiz</span>
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowCreateForm(false);
-                      setNewQuizTopic('');
-                      setNewQuizDifficulty('medium');
-                    }}
-                    className="bg-white/80 backdrop-blur-sm hover:bg-white text-gray-700 font-medium py-2 px-4 rounded-lg border border-gray-300 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <CreateQuizForm
+            topic={newQuizTopic}
+            difficulty={newQuizDifficulty}
+            loading={loading}
+            onTopicChange={setNewQuizTopic}
+            onDifficultyChange={setNewQuizDifficulty}
+            onGenerate={generateQuiz}
+            onCancel={() => {
+              setShowCreateForm(false);
+              setNewQuizTopic('');
+              setNewQuizDifficulty('medium');
+            }}
+          />
         )}
 
         <div className="flex flex-col lg:flex-row gap-6 sm:gap-8">
@@ -680,91 +580,20 @@ export default function QuizPage() {
                 </button>
               </div>
             ) : (
-              <div className="space-y-4">
-                {quizzes.map((quiz) => (
-                  <div key={quiz.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow duration-200">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-4 sm:space-y-0">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-1 truncate">
-                          {quiz.title}
-                        </h3>
-                        <p className="text-gray-600 mb-2">{quiz.topic}</p>
-                        <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-gray-500">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(quiz.difficulty)}`}>
-                            {quiz.difficulty}
-                          </span>
-                          <span className="flex items-center">
-                            <Clock className="w-4 h-4 mr-1" />
-                            {quiz.questions.length} questions
-                          </span>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => startQuiz(quiz)}
-                        className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto"
-                      >
-                        <Play className="w-4 h-4" />
-                        <span>Start</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <QuizList
+                quizzes={quizzes}
+                onStart={startQuiz}
+                getDifficultyColor={getDifficultyColor}
+              />
             )}
           </div>
 
           {/* Sidebar */}
-          <div className={`lg:w-80 ${showSidebar ? 'block' : 'hidden lg:block'}`}>
-            {showSidebar && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden" onClick={() => setShowSidebar(false)}></div>
-            )}
-            <div className={`${showSidebar ? 'fixed right-0 top-0 h-full w-80 bg-white z-50 p-4 overflow-y-auto lg:relative lg:z-auto lg:p-0 lg:bg-transparent' : ''}`}>
-              {showSidebar && (
-                <div className="flex justify-between items-center mb-4 lg:hidden">
-                  <h3 className="text-lg font-semibold">Recent Attempts</h3>
-                  <button onClick={() => setShowSidebar(false)}>
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-              )}
-              
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4 hidden lg:block">Recent Attempts</h2>
-                {attempts.length === 0 ? (
-                  <div className="text-center py-6 sm:py-8">
-                    <Target className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 mx-auto mb-2" />
-                    <p className="text-gray-600 text-sm">No attempts yet</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {attempts.map((attempt) => (
-                      <div key={attempt.id} className="bg-gray-50 rounded-lg p-3 sm:p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-medium text-gray-900 text-sm truncate flex-1 mr-2">
-                            {attempt.quiz.title}
-                          </h4>
-                          <div className={`flex items-center ${
-                            attempt.score >= 80 ? 'text-green-600' : 
-                            attempt.score >= 60 ? 'text-yellow-600' : 'text-red-600'
-                          }`}>
-                            {attempt.score >= 80 ? (
-                              <CheckCircle className="w-4 h-4 mr-1" />
-                            ) : (
-                              <XCircle className="w-4 h-4 mr-1" />
-                            )}
-                            <span className="text-sm font-medium">{attempt.score}%</span>
-                          </div>
-                        </div>
-                        <p className="text-xs text-gray-500">
-                          {new Date(attempt.completed_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          <RecentAttemptsSidebar
+            attempts={attempts}
+            showSidebar={showSidebar}
+            onClose={() => setShowSidebar(false)}
+          />
         </div>
       </div>
     </div>
