@@ -28,14 +28,16 @@ import PerformanceAnalysis from '../components/QuizResultsPage/PerformanceAnalys
 import DetailedReview from '../components/QuizResultsPage/DetailedReview';
 import Recommendations from '../components/QuizResultsPage/Recommendations';
 import QuizPerformanceSidebar from '../components/QuizResultsPage/QuizPerformanceSidebar';
+import { QuizScoringService } from '../services/quizScoringService';
+import { GradedQuestion } from '../services/gradingService';
 
 interface Question {
   id: string;
-  type: 'single' | 'multiple' | 'true_false' | 'open_answer';
+  type: 'single' | 'multiple' | 'true_false' | 'open_ended';
   question: string;
   options?: string[];
   explanation: string;
-  correct_answer: number[];
+  correct_answer: number[] | string | boolean;
 }
 
 interface Quiz {
@@ -48,8 +50,9 @@ interface Quiz {
 
 interface QuizResultsState {
   quiz: Quiz;
-  selectedAnswers: (number[] | string)[];
+  selectedAnswers: (number[] | string | boolean)[];
   score: number;
+  gradingResults?: GradedQuestion[];
 }
 
 interface QuizStats {
@@ -164,51 +167,18 @@ export default function QuizResultsPage() {
 
     setLoadingAnalysis(true);
     try {
-      const { quiz, selectedAnswers } = state;
+      const { quiz, selectedAnswers, gradingResults } = state;
       
-      // Calculate correct score properly
+      // Calculate correct count using the scoring service
       const correctCount = quiz.questions.filter((q, index) => {
-        if (q.type === 'open_answer') {
-          // For open answers, check if user provided an answer
-          const answer = selectedAnswers[index];
-          return typeof answer === 'string' && answer.trim().length > 0;
-        }
-        
-        const userAnswer = selectedAnswers[index] as number[];
-        const correctAnswer = q.correct_answer;
-        
-        if (q.type === 'single' || q.type === 'true_false') {
-          return userAnswer.length === 1 && userAnswer[0] === correctAnswer[0];
-        } else if (q.type === 'multiple') {
-          const userSet = new Set(userAnswer);
-          const correctSet = new Set(correctAnswer);
-          return userSet.size === correctSet.size && 
-                 [...userSet].every(x => correctSet.has(x));
-        }
-        return false;
+        return QuizScoringService.isQuestionCorrect(q, selectedAnswers[index], gradingResults);
       }).length;
 
       // Recalculate the actual score based on correct answers
       const actualScore = Math.round((correctCount / quiz.questions.length) * 100);
 
       const incorrectQuestions = quiz.questions.filter((q, index) => {
-        if (q.type === 'open_answer') {
-          const answer = selectedAnswers[index];
-          return !(typeof answer === 'string' && answer.trim().length > 0);
-        }
-        
-        const userAnswer = selectedAnswers[index] as number[];
-        const correctAnswer = q.correct_answer;
-        
-        if (q.type === 'single' || q.type === 'true_false') {
-          return !(userAnswer.length === 1 && userAnswer[0] === correctAnswer[0]);
-        } else if (q.type === 'multiple') {
-          const userSet = new Set(userAnswer);
-          const correctSet = new Set(correctAnswer);
-          return !(userSet.size === correctSet.size && 
-                   [...userSet].every(x => correctSet.has(x)));
-        }
-        return false;
+        return !QuizScoringService.isQuestionCorrect(q, selectedAnswers[index], gradingResults);
       });
 
       // Generate personalized analysis using the actual score
@@ -241,8 +211,16 @@ export default function QuizResultsPage() {
       if (missedTypes.includes('multiple')) {
         analysis += ` Pay special attention to multiple-choice questions - they often test comprehensive understanding of topics.`;
       }
-      if (missedTypes.includes('open_answer')) {
+      if (missedTypes.includes('open_ended')) {
         analysis += ` Work on articulating your thoughts clearly for open-ended questions.`;
+      }
+
+      // Add insights from grading results if available
+      if (gradingResults && gradingResults.length > 0) {
+        const partialCredits = gradingResults.filter(r => r.grade === 'partial').length;
+        if (partialCredits > 0) {
+          analysis += ` You received partial credit on ${partialCredits} open-ended question(s), showing good understanding that can be improved with more detail and clarity.`;
+        }
       }
 
       setAnalysisText(analysis);
@@ -260,37 +238,7 @@ export default function QuizResultsPage() {
     const question = state.quiz.questions[questionIndex];
     const userAnswer = state.selectedAnswers[questionIndex];
     
-    if (question.type === 'open_answer') {
-      return typeof userAnswer === 'string' && userAnswer.trim().length > 0;
-    }
-    
-    const userAnswerArray = userAnswer as number[];
-    const correctAnswer = question.correct_answer;
-    
-    if (question.type === 'single' || question.type === 'true_false') {
-      return userAnswerArray.length === 1 && userAnswerArray[0] === correctAnswer[0];
-    } else if (question.type === 'multiple') {
-      const userSet = new Set(userAnswerArray);
-      const correctSet = new Set(correctAnswer);
-      return userSet.size === correctSet.size && 
-             [...userSet].every(x => correctSet.has(x));
-    }
-    
-    return false;
-  };
-
-  const getScoreColor = (score: number) => {
-    if (score >= 90) return 'text-green-600';
-    if (score >= 80) return 'text-blue-600';
-    if (score >= 60) return 'text-yellow-600';
-    return 'text-red-600';
-  };
-
-  const getScoreBgColor = (score: number) => {
-    if (score >= 90) return 'bg-green-50 border-green-200';
-    if (score >= 80) return 'bg-blue-50 border-blue-200';
-    if (score >= 60) return 'bg-yellow-50 border-yellow-200';
-    return 'bg-red-50 border-red-200';
+    return QuizScoringService.isQuestionCorrect(question, userAnswer, state.gradingResults);
   };
 
   const retakeQuiz = () => {
@@ -364,6 +312,7 @@ export default function QuizResultsPage() {
                 isAnswerCorrect={isAnswerCorrect}
                 expandedQuestion={expandedQuestion}
                 setExpandedQuestion={setExpandedQuestion}
+                gradingResults={state.gradingResults}
               />
             )}
             <Recommendations actualScore={actualScore} quizTopic={quiz.topic} />
