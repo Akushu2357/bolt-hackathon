@@ -1,211 +1,129 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
-import { Send, Bot, User, Plus, MessageCircle, Trash2, ChevronRight, ChevronLeft, X } from 'lucide-react';
-
-interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  created_at: string;
-}
-
-interface ChatSession {
-  id: string;
-  title: string;
-  created_at: string;
-}
+import { 
+  Send, 
+  Bot, 
+  User, 
+  Plus, 
+  MessageCircle, 
+  ChevronRight, 
+  ChevronLeft, 
+  X,
+  Check,
+  CheckCheck,
+  Circle,
+  Wifi,
+  WifiOff
+} from 'lucide-react';
+import { mockChatSessions, getFormattedTime, getMessageTime, MockChatSession, MockMessage } from '../data/mockChatData';
 
 export default function ChatPage() {
   const { user } = useAuth();
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [sessions, setSessions] = useState<MockChatSession[]>(mockChatSessions);
+  const [currentSession, setCurrentSession] = useState<MockChatSession | null>(mockChatSessions[0]);
+  const [messages, setMessages] = useState<MockMessage[]>(mockChatSessions[0]?.messages || []);
   const [inputMessage, setInputMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const [loadingSessions, setLoadingSessions] = useState(true);
   const [showSidebar, setShowSidebar] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (user) {
-      fetchSessions();
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (currentSession) {
-      fetchMessages(currentSession.id);
-    }
-  }, [currentSession]);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
+  useEffect(() => {
+    if (currentSession) {
+      setMessages(currentSession.messages);
+      // Mark messages as read when switching to a session
+      markSessionAsRead(currentSession.id);
+    }
+  }, [currentSession]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const fetchSessions = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('chat_sessions')
-        .select('*')
-        .eq('user_id', user!.id)
-        .order('updated_at', { ascending: false });
-
-      if (error) throw error;
-      setSessions(data || []);
-      
-      if (data && data.length > 0) {
-        setCurrentSession(data[0]);
-      }
-    } catch (error) {
-      console.error('Error fetching sessions:', error);
-    } finally {
-      setLoadingSessions(false);
-    }
+  const markSessionAsRead = (sessionId: string) => {
+    setSessions(prevSessions => 
+      prevSessions.map(session => 
+        session.id === sessionId 
+          ? { ...session, unreadCount: 0 }
+          : session
+      )
+    );
   };
 
-  const fetchMessages = async (sessionId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('chat_messages')
-        .select('*')
-        .eq('session_id', sessionId)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      setMessages(data || []);
-    } catch (error) {
-      console.error('Error fetching messages:', error);
-    }
+  const createNewSession = () => {
+    const newSession: MockChatSession = {
+      id: `new-${Date.now()}`,
+      title: 'New Chat Session',
+      lastMessage: '',
+      timestamp: new Date().toISOString(),
+      unreadCount: 0,
+      isOnline: true,
+      messages: []
+    };
+    
+    setSessions([newSession, ...sessions]);
+    setCurrentSession(newSession);
+    setMessages([]);
+    setShowSidebar(false);
   };
 
-  const createNewSession = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('chat_sessions')
-        .insert({
-          user_id: user!.id,
-          title: 'New Chat Session'
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      
-      const newSession = data;
-      setSessions([newSession, ...sessions]);
-      setCurrentSession(newSession);
-      setMessages([]);
-      setShowSidebar(false);
-    } catch (error) {
-      console.error('Error creating session:', error);
-    }
+  const selectSession = (session: MockChatSession) => {
+    setCurrentSession(session);
+    setShowSidebar(false);
   };
 
-  const deleteSession = async (sessionId: string) => {
-    try {
-      await supabase
-        .from('chat_messages')
-        .delete()
-        .eq('session_id', sessionId);
-
-      await supabase
-        .from('chat_sessions')
-        .delete()
-        .eq('id', sessionId);
-
-      const updatedSessions = sessions.filter(s => s.id !== sessionId);
-      setSessions(updatedSessions);
-      
-      if (currentSession?.id === sessionId) {
-        setCurrentSession(updatedSessions[0] || null);
-        setMessages([]);
-      }
-    } catch (error) {
-      console.error('Error deleting session:', error);
-    }
-  };
-
-  const sendMessage = async () => {
+  const sendMessage = () => {
     if (!inputMessage.trim() || !currentSession || loading) return;
 
     const userMessage = inputMessage.trim();
     setInputMessage('');
     setLoading(true);
 
-    try {
-      const userMsg: Message = {
-        id: Date.now().toString(),
-        role: 'user',
-        content: userMessage,
-        created_at: new Date().toISOString()
-      };
-      setMessages(prev => [...prev, userMsg]);
+    // Add user message
+    const newUserMessage: MockMessage = {
+      id: `msg-${Date.now()}`,
+      role: 'user',
+      content: userMessage,
+      timestamp: new Date().toISOString(),
+      status: 'sent'
+    };
 
-      await supabase
-        .from('chat_messages')
-        .insert({
-          session_id: currentSession.id,
-          role: 'user',
-          content: userMessage
-        });
+    const updatedMessages = [...messages, newUserMessage];
+    setMessages(updatedMessages);
 
-      const aiResponse = await generateAIResponse(userMessage);
-      
-      const aiMsg: Message = {
-        id: (Date.now() + 1).toString(),
+    // Simulate AI response after a delay
+    setTimeout(() => {
+      const aiResponse: MockMessage = {
+        id: `msg-${Date.now() + 1}`,
         role: 'assistant',
-        content: aiResponse,
-        created_at: new Date().toISOString()
+        content: `Thank you for your question: "${userMessage}". This is a mock response. In the real implementation, this would be replaced with actual AI-generated content.`,
+        timestamp: new Date().toISOString(),
+        status: 'delivered'
       };
-      setMessages(prev => [...prev, aiMsg]);
 
-      await supabase
-        .from('chat_messages')
-        .insert({
-          session_id: currentSession.id,
-          role: 'assistant',
-          content: aiResponse
-        });
+      const finalMessages = [...updatedMessages, aiResponse];
+      setMessages(finalMessages);
 
-      if (messages.length === 0) {
-        const title = userMessage.length > 50 
-          ? userMessage.substring(0, 50) + '...' 
-          : userMessage;
-        
-        await supabase
-          .from('chat_sessions')
-          .update({ title })
-          .eq('id', currentSession.id);
+      // Update the session with new messages
+      const updatedSession = {
+        ...currentSession,
+        messages: finalMessages,
+        lastMessage: aiResponse.content,
+        timestamp: aiResponse.timestamp
+      };
 
-        setSessions(prev => 
-          prev.map(s => s.id === currentSession.id ? { ...s, title } : s)
-        );
-      }
+      setSessions(prevSessions =>
+        prevSessions.map(session =>
+          session.id === currentSession.id ? updatedSession : session
+        )
+      );
 
-    } catch (error) {
-      console.error('Error sending message:', error);
-    } finally {
+      setCurrentSession(updatedSession);
       setLoading(false);
-    }
-  };
-
-  const generateAIResponse = async (message: string): Promise<string> => {
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const responses = [
-      `Great question! Let me help you understand this concept better. ${message.toLowerCase().includes('math') ? 'Mathematics is all about patterns and logical thinking.' : 'This is an interesting topic to explore.'}`,
-      `I'd be happy to explain that! Let's break this down step by step to make it easier to understand.`,
-      `That's a thoughtful question. Here's how I would approach this problem...`,
-      `Excellent! This is a fundamental concept. Let me provide you with a clear explanation and some examples.`,
-      `I can see you're thinking deeply about this. Let me guide you through the solution process.`
-    ];
-    
-    return responses[Math.floor(Math.random() * responses.length)];
+    }, 1500);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -215,16 +133,18 @@ export default function ChatPage() {
     }
   };
 
-  if (loadingSessions) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading chat sessions...</p>
-        </div>
-      </div>
-    );
-  }
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'sent':
+        return <Check className="w-3 h-3 text-gray-400" />;
+      case 'delivered':
+        return <CheckCheck className="w-3 h-3 text-gray-400" />;
+      case 'read':
+        return <CheckCheck className="w-3 h-3 text-blue-500" />;
+      default:
+        return <Circle className="w-3 h-3 text-gray-300" />;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -282,33 +202,62 @@ export default function ChatPage() {
                   {sessions.map((session) => (
                     <div
                       key={session.id}
-                      className={`group flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors duration-200 ${
+                      className={`group flex items-start p-3 rounded-lg cursor-pointer transition-colors duration-200 hover:bg-gray-50 ${
                         currentSession?.id === session.id
-                          ? 'bg-primary-50 text-primary-700'
-                          : 'hover:bg-gray-50'
+                          ? 'bg-primary-50 border-l-4 border-primary-500'
+                          : ''
                       }`}
-                      onClick={() => {
-                        setCurrentSession(session);
-                        setShowSidebar(false);
-                      }}
+                      onClick={() => selectSession(session)}
                     >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {session.title}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {new Date(session.created_at).toLocaleDateString()}
-                        </p>
+                      <div className="flex-shrink-0 mr-3">
+                        <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center relative">
+                          <Bot className="w-5 h-5 text-primary-600" />
+                          {session.isOnline ? (
+                            <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white">
+                              <Wifi className="w-2 h-2 text-white absolute top-0 left-0" />
+                            </div>
+                          ) : (
+                            <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-gray-400 rounded-full border-2 border-white">
+                              <WifiOff className="w-2 h-2 text-white absolute top-0 left-0" />
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteSession(session.id);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 rounded transition-all duration-200"
-                      >
-                        <Trash2 className="w-4 h-4 text-red-500" />
-                      </button>
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <h3 className="text-sm font-semibold text-gray-900 truncate">
+                            {session.title}
+                          </h3>
+                          <div className="flex items-center space-x-1">
+                            <span className="text-xs text-gray-500">
+                              {getFormattedTime(session.timestamp)}
+                            </span>
+                            {session.unreadCount > 0 && (
+                              <div className="w-5 h-5 bg-primary-600 rounded-full flex items-center justify-center">
+                                <span className="text-xs text-white font-medium">
+                                  {session.unreadCount > 9 ? '9+' : session.unreadCount}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <p className="text-sm text-gray-600 truncate">
+                          {session.lastMessage || 'No messages yet'}
+                        </p>
+                        
+                        <div className="flex items-center justify-between mt-1">
+                          <div className="flex items-center space-x-1">
+                            <span className={`w-2 h-2 rounded-full ${
+                              session.isOnline ? 'bg-green-500' : 'bg-gray-400'
+                            }`}></span>
+                            <span className="text-xs text-gray-500">
+                              {session.isOnline ? 'Online' : 'Offline'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -330,9 +279,22 @@ export default function ChatPage() {
               <>
                 {/* Chat Header */}
                 <div className="p-4 border-b border-gray-200 bg-white">
-                  <h3 className="font-semibold text-gray-900 truncate">
-                    {currentSession.title}
-                  </h3>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center relative">
+                      <Bot className="w-4 h-4 text-primary-600" />
+                      {currentSession.isOnline && (
+                        <div className="absolute -bottom-1 -right-1 w-2 h-2 bg-green-500 rounded-full"></div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-gray-900 truncate">
+                        {currentSession.title}
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        {currentSession.isOnline ? 'Online' : 'Last seen recently'}
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Messages */}
@@ -373,6 +335,20 @@ export default function ChatPage() {
                               : 'bg-gray-100 text-gray-900'
                           }`}>
                             <p className="whitespace-pre-wrap text-sm sm:text-base">{message.content}</p>
+                            <div className={`flex items-center justify-between mt-1 space-x-2 ${
+                              message.role === 'user' ? 'flex-row-reverse' : 'flex-row'
+                            }`}>
+                              <span className={`text-xs ${
+                                message.role === 'user' ? 'text-primary-200' : 'text-gray-500'
+                              }`}>
+                                {getMessageTime(message.timestamp)}
+                              </span>
+                              {message.role === 'user' && (
+                                <div className="flex items-center">
+                                  {getStatusIcon(message.status)}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -406,7 +382,7 @@ export default function ChatPage() {
                       value={inputMessage}
                       onChange={(e) => setInputMessage(e.target.value)}
                       onKeyPress={handleKeyPress}
-                      placeholder="Ask me anything..."
+                      placeholder="Type your message here... (Mock interface - messages won't be saved)"
                       className="flex-1 resize-none input-field text-sm sm:text-base"
                       rows={1}
                       disabled={loading}
@@ -419,6 +395,9 @@ export default function ChatPage() {
                       <Send className="w-4 h-4" />
                     </button>
                   </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    This is a mock interface. Messages are not saved and will reset on page refresh.
+                  </p>
                 </div>
               </>
             ) : (
@@ -429,7 +408,7 @@ export default function ChatPage() {
                     No chat selected
                   </h3>
                   <p className="text-gray-600 mb-4 text-sm sm:text-base">
-                    Create a new chat session to get started
+                    Select a chat session from the sidebar to start messaging
                   </p>
                   <button
                     onClick={createNewSession}
