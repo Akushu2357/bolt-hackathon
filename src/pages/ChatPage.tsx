@@ -13,7 +13,9 @@ import {
   CheckCheck,
   Circle,
   Wifi,
-  WifiOff
+  WifiOff,
+  Trash2,
+  MoreVertical
 } from 'lucide-react';
 import { mockChatSessions, getFormattedTime, getMessageTime, MockChatSession, MockMessage } from '../data/mockChatData';
 
@@ -25,6 +27,8 @@ export default function ChatPage() {
   const [inputMessage, setInputMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -38,6 +42,16 @@ export default function ChatPage() {
       markSessionAsRead(currentSession.id);
     }
   }, [currentSession]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setActiveDropdown(null);
+    };
+    
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -73,6 +87,29 @@ export default function ChatPage() {
   const selectSession = (session: MockChatSession) => {
     setCurrentSession(session);
     setShowSidebar(false);
+  };
+
+  const deleteSession = (sessionId: string) => {
+    const updatedSessions = sessions.filter(session => session.id !== sessionId);
+    setSessions(updatedSessions);
+    
+    // If we're deleting the current session, switch to another one or clear
+    if (currentSession?.id === sessionId) {
+      if (updatedSessions.length > 0) {
+        setCurrentSession(updatedSessions[0]);
+      } else {
+        setCurrentSession(null);
+        setMessages([]);
+      }
+    }
+    
+    setShowDeleteConfirm(null);
+    setActiveDropdown(null);
+  };
+
+  const toggleDropdown = (sessionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setActiveDropdown(activeDropdown === sessionId ? null : sessionId);
   };
 
   const sendMessage = () => {
@@ -202,7 +239,7 @@ export default function ChatPage() {
                   {sessions.map((session) => (
                     <div
                       key={session.id}
-                      className={`group flex items-start p-3 rounded-lg cursor-pointer transition-colors duration-200 hover:bg-gray-50 ${
+                      className={`group flex items-start p-3 rounded-lg cursor-pointer transition-colors duration-200 hover:bg-gray-50 relative ${
                         currentSession?.id === session.id
                           ? 'bg-primary-50 border-l-4 border-primary-500'
                           : ''
@@ -226,7 +263,7 @@ export default function ChatPage() {
                       
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
-                          <h3 className="text-sm font-semibold text-gray-900 truncate">
+                          <h3 className="text-sm font-semibold text-gray-900 truncate pr-2">
                             {session.title}
                           </h3>
                           <div className="flex items-center space-x-1">
@@ -243,7 +280,7 @@ export default function ChatPage() {
                           </div>
                         </div>
                         
-                        <p className="text-sm text-gray-600 truncate">
+                        <p className="text-sm text-gray-600 truncate pr-8">
                           {session.lastMessage || 'No messages yet'}
                         </p>
                         
@@ -258,12 +295,71 @@ export default function ChatPage() {
                           </div>
                         </div>
                       </div>
+
+                      {/* Dropdown Menu */}
+                      <div className="absolute top-2 right-2">
+                        <button
+                          onClick={(e) => toggleDropdown(session.id, e)}
+                          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded transition-all duration-200"
+                        >
+                          <MoreVertical className="w-4 h-4 text-gray-500" />
+                        </button>
+                        
+                        {activeDropdown === session.id && (
+                          <div className="absolute right-0 top-8 w-32 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowDeleteConfirm(session.id);
+                                setActiveDropdown(null);
+                              }}
+                              className="flex items-center space-x-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              <span>Delete</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
             </div>
           </div>
+
+          {/* Delete Confirmation Modal */}
+          {showDeleteConfirm && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+                <div className="flex items-center mb-4">
+                  <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mr-3">
+                    <Trash2 className="w-5 h-5 text-red-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900">Delete Chat</h3>
+                </div>
+                
+                <p className="text-gray-600 mb-6">
+                  Are you sure you want to delete this chat session? This action cannot be undone and all messages will be permanently removed.
+                </p>
+                
+                <div className="flex space-x-3">
+                  <button
+                    onClick={() => deleteSession(showDeleteConfirm)}
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
+                  >
+                    Delete
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteConfirm(null)}
+                    className="flex-1 btn-secondary"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Overlay for mobile */}
           {showSidebar && (
