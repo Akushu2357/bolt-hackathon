@@ -1,3 +1,4 @@
+import React from 'react';
 import { BookOpen, CheckCircle, XCircle, Target, Lightbulb, AlertTriangle, Brain } from 'lucide-react';
 import { QuizScoringService } from '../../services/quizScoringService';
 import { GradedQuestion } from '../../services/gradingService';

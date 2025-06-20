@@ -1,11 +1,13 @@
 import React from 'react';
+import { CheckCircle } from 'lucide-react';
 
 interface QuizQuestionProps {
   question: any;
+  currentAnswer: any;
   renderInput: (q: any) => React.ReactNode;
 }
 
-const QuizQuestion: React.FC<QuizQuestionProps> = ({ question, renderInput }) => (
+const QuizQuestion: React.FC<QuizQuestionProps> = ({ question, currentAnswer, renderInput }) => (
   <div className="mb-6 sm:mb-8">
     <div className="flex items-start space-x-3 mb-4">
       <div className={`px-2 py-1 rounded text-xs font-medium ${
