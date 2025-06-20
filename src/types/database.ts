@@ -4,6 +4,7 @@ import { ChatMessageTable } from './table_chat_messages';
 import { QuizTable } from './table_quizzes';
 import { QuizAttemptTable } from './table_quiz_attempts';
 import { LearningProgressTable } from './table_learning_progress';
+import { ScheduleTable } from './table_schedule';
 
 export type Database = {
   public: {
@@ -14,6 +15,7 @@ export type Database = {
       quizzes: QuizTable;
       quiz_attempts: QuizAttemptTable;
       learning_progress: LearningProgressTable;
+      schedule: ScheduleTable;
     };
   };
 };

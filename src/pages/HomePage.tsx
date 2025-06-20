@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { ScheduleService, ScheduleItem, CreateScheduleItem } from '../services/scheduleService';
+import { GuestLimitService } from '../services/guestLimitService';
 import { 
   MessageCircle, 
   FileQuestion, 
@@ -20,7 +22,9 @@ import {
   Users,
   Zap,
   Shield,
-  LogIn
+  LogIn,
+  Trash2,
+  Edit3
 } from 'lucide-react';
 
 interface DashboardStats {
@@ -28,15 +32,6 @@ interface DashboardStats {
   totalQuizzes: number;
   averageScore: number;
   weakAreas: string[];
-}
-
-interface StudyScheduleItem {
-  id: string;
-  title: string;
-  subject: string;
-  day: string;
-  time: string;
-  completed: boolean;
 }
 
 export default function HomePage() {
@@ -51,20 +46,23 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
-  const [studySchedule, setStudySchedule] = useState<StudyScheduleItem[]>([]);
+  const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [showScheduleForm, setShowScheduleForm] = useState(false);
-  const [newScheduleItem, setNewScheduleItem] = useState({
+  const [newScheduleItem, setNewScheduleItem] = useState<CreateScheduleItem>({
     title: '',
     subject: '',
-    day: '',
+    date: '',
     time: ''
   });
+  const [guestUsage, setGuestUsage] = useState(GuestLimitService.getUsageSummary());
 
   useEffect(() => {
     if (user) {
       fetchDashboardStats();
-      fetchStudySchedule();
+      fetchScheduleItems();
     } else {
+      // Update guest usage display
+      setGuestUsage(GuestLimitService.getUsageSummary());
       setLoading(false);
     }
   }, [user]);
@@ -109,40 +107,27 @@ export default function HomePage() {
     }
   };
 
-  const fetchStudySchedule = async () => {
-    // Mock data for study schedule - in real app, this would come from database
-    const mockSchedule: StudyScheduleItem[] = [
-      {
-        id: '1',
-        title: 'Algebra Review',
-        subject: 'Mathematics',
-        day: 'Monday',
-        time: '10:00 AM',
-        completed: false
-      },
-      {
-        id: '2',
-        title: 'Physics Laws',
-        subject: 'Physics',
-        day: 'Tuesday',
-        time: '2:00 PM',
-        completed: true
-      },
-      {
-        id: '3',
-        title: 'Essay Writing',
-        subject: 'English',
-        day: 'Wednesday',
-        time: '11:00 AM',
-        completed: false
-      }
-    ];
-    setStudySchedule(mockSchedule);
+  const fetchScheduleItems = async () => {
+    if (!user) return;
+    
+    try {
+      const items = await ScheduleService.fetchUpcomingScheduleItems(user, 5);
+      setScheduleItems(items);
+    } catch (error) {
+      console.error('Error fetching schedule items:', error);
+    }
   };
 
   const handleChatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim() || chatLoading) return;
+
+    // Check guest limits
+    if (!user && !GuestLimitService.canPerformAction('chat')) {
+      // This will be handled by the chat page
+      navigate(`/chat?message=${encodeURIComponent(chatInput)}`);
+      return;
+    }
 
     setChatLoading(true);
     try {
@@ -180,26 +165,41 @@ export default function HomePage() {
     }
   };
 
-  const addScheduleItem = () => {
-    if (!newScheduleItem.title || !newScheduleItem.subject || !newScheduleItem.day || !newScheduleItem.time) return;
+  const addScheduleItem = async () => {
+    if (!user || !newScheduleItem.title || !newScheduleItem.subject || !newScheduleItem.date || !newScheduleItem.time) return;
 
-    const newItem: StudyScheduleItem = {
-      id: Date.now().toString(),
-      ...newScheduleItem,
-      completed: false
-    };
-
-    setStudySchedule([...studySchedule, newItem]);
-    setNewScheduleItem({ title: '', subject: '', day: '', time: '' });
-    setShowScheduleForm(false);
+    try {
+      const newItem = await ScheduleService.createScheduleItem(user, newScheduleItem);
+      setScheduleItems([newItem, ...scheduleItems]);
+      setNewScheduleItem({ title: '', subject: '', date: '', time: '' });
+      setShowScheduleForm(false);
+    } catch (error) {
+      console.error('Error creating schedule item:', error);
+    }
   };
 
-  const toggleScheduleItem = (id: string) => {
-    setStudySchedule(schedule =>
-      schedule.map(item =>
-        item.id === id ? { ...item, completed: !item.completed } : item
-      )
-    );
+  const toggleScheduleItem = async (id: string) => {
+    if (!user) return;
+
+    try {
+      const updatedItem = await ScheduleService.toggleScheduleItemCompletion(user, id);
+      setScheduleItems(items =>
+        items.map(item => item.id === id ? updatedItem : item)
+      );
+    } catch (error) {
+      console.error('Error toggling schedule item:', error);
+    }
+  };
+
+  const deleteScheduleItem = async (id: string) => {
+    if (!user) return;
+
+    try {
+      await ScheduleService.deleteScheduleItem(user, id);
+      setScheduleItems(items => items.filter(item => item.id !== id));
+    } catch (error) {
+      console.error('Error deleting schedule item:', error);
+    }
   };
 
   // Logged-out user view
@@ -216,6 +216,25 @@ export default function HomePage() {
               <p className="text-xl sm:text-2xl text-primary-100 mb-8 max-w-3xl mx-auto">
                 Personalized tutoring, interactive quizzes, and progress tracking - all powered by advanced AI technology
               </p>
+              
+              {/* Guest Usage Display */}
+              <div className="max-w-md mx-auto mb-8 bg-white bg-opacity-20 rounded-lg p-4 backdrop-blur-sm">
+                <h3 className="text-lg font-semibold mb-3">Free Trial Usage</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>Chat Messages:</span>
+                    <span className="font-medium">{guestUsage.chats.remaining}/{guestUsage.chats.total} remaining</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Quiz Generation:</span>
+                    <span className="font-medium">{guestUsage.quizzes.remaining}/{guestUsage.quizzes.total} remaining</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Quiz Attempts:</span>
+                    <span className="font-medium">{guestUsage.quizAttempts.remaining}/{guestUsage.quizAttempts.total} remaining</span>
+                  </div>
+                </div>
+              </div>
               
               {/* Chat Input for Logged-out Users */}
               <div className="max-w-2xl mx-auto mb-8">
@@ -244,7 +263,10 @@ export default function HomePage() {
                   </button>
                 </form>
                 <p className="text-primary-200 text-sm mt-3">
-                  Get 3-5 free chat requests • No signup required
+                  {guestUsage.chats.remaining > 0 
+                    ? `${guestUsage.chats.remaining} free chat${guestUsage.chats.remaining !== 1 ? 's' : ''} remaining`
+                    : 'Chat limit reached - Login for unlimited access'
+                  }
                 </p>
               </div>
 
@@ -254,7 +276,7 @@ export default function HomePage() {
                   className="px-8 py-4 bg-primary-500 hover:bg-primary-400 text-white font-semibold rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
                 >
                   <FileQuestion className="w-5 h-5" />
-                  <span>Try Free Quiz</span>
+                  <span>Try Free Quiz ({guestUsage.quizzes.remaining} left)</span>
                 </Link>
                 <Link
                   to="/auth"
@@ -524,20 +546,12 @@ export default function HomePage() {
                     onChange={(e) => setNewScheduleItem({...newScheduleItem, subject: e.target.value})}
                     className="input-field"
                   />
-                  <select
-                    value={newScheduleItem.day}
-                    onChange={(e) => setNewScheduleItem({...newScheduleItem, day: e.target.value})}
+                  <input
+                    type="date"
+                    value={newScheduleItem.date}
+                    onChange={(e) => setNewScheduleItem({...newScheduleItem, date: e.target.value})}
                     className="input-field"
-                  >
-                    <option value="">Select day</option>
-                    <option value="Monday">Monday</option>
-                    <option value="Tuesday">Tuesday</option>
-                    <option value="Wednesday">Wednesday</option>
-                    <option value="Thursday">Thursday</option>
-                    <option value="Friday">Friday</option>
-                    <option value="Saturday">Saturday</option>
-                    <option value="Sunday">Sunday</option>
-                  </select>
+                  />
                   <input
                     type="time"
                     value={newScheduleItem.time}
@@ -563,7 +577,7 @@ export default function HomePage() {
             )}
 
             <div className="card">
-              {studySchedule.length === 0 ? (
+              {scheduleItems.length === 0 ? (
                 <div className="text-center py-8">
                   <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No study sessions scheduled</h3>
@@ -579,7 +593,7 @@ export default function HomePage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {studySchedule.map((item) => (
+                  {scheduleItems.map((item) => (
                     <div
                       key={item.id}
                       className={`flex items-center justify-between p-4 rounded-lg border-2 transition-all duration-200 ${
@@ -604,7 +618,7 @@ export default function HomePage() {
                             {item.title}
                           </h4>
                           <p className="text-sm text-gray-600">
-                            {item.subject} • {item.day} at {item.time}
+                            {item.subject} • {new Date(item.date).toLocaleDateString()} at {item.time}
                           </p>
                         </div>
                       </div>
@@ -614,6 +628,12 @@ export default function HomePage() {
                             Completed
                           </span>
                         )}
+                        <button
+                          onClick={() => deleteScheduleItem(item.id)}
+                          className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
                   ))}
