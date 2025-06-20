@@ -68,12 +68,29 @@ export class QuizScoringService {
           openEndedIndices.push(index);
           break;
           
+        case 'single':
         default:
-          // Single choice: direct comparison
-          const correctIndex = Array.isArray(correctAnswer) ? correctAnswer[0] : correctAnswer;
-          if (userAnswer === correctIndex) {
+          // Single choice: compare the selected index with correct answer
+          let isCorrect = false;
+          
+          if (Array.isArray(correctAnswer)) {
+            // If correct_answer is an array, check if user's answer matches any of them
+            isCorrect = correctAnswer.includes(userAnswer as number);
+          } else if (typeof correctAnswer === 'number') {
+            // If correct_answer is a number (index), compare directly
+            isCorrect = userAnswer === correctAnswer;
+          } else {
+            // If correct_answer is a string, find its index in options and compare
+            if (question.options) {
+              const correctIndex = question.options.indexOf(correctAnswer as string);
+              isCorrect = userAnswer === correctIndex;
+            }
+          }
+          
+          if (isCorrect) {
             correct++;
           }
+          break;
       }
     }
     
@@ -126,9 +143,23 @@ export class QuizScoringService {
         }
         return false; // Default to false if no grading results
         
+      case 'single':
       default:
-        const correctIndex = Array.isArray(correctAnswer) ? correctAnswer[0] : correctAnswer;
-        return userAnswer === correctIndex;
+        // Single choice: handle different correct_answer formats
+        if (Array.isArray(correctAnswer)) {
+          // If correct_answer is an array, check if user's answer matches any of them
+          return correctAnswer.includes(userAnswer as number);
+        } else if (typeof correctAnswer === 'number') {
+          // If correct_answer is a number (index), compare directly
+          return userAnswer === correctAnswer;
+        } else {
+          // If correct_answer is a string, find its index in options and compare
+          if (question.options) {
+            const correctIndex = question.options.indexOf(correctAnswer as string);
+            return userAnswer === correctIndex;
+          }
+          return false;
+        }
     }
   }
 
