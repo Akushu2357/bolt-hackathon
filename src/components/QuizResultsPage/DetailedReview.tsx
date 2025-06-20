@@ -250,22 +250,23 @@ export default function DetailedReview({
                   )}
 
                   {/* Show general explanation */}
+                  
+                      {!gradingResult && (
                   <div className="bg-gradient-to-br from-blue-50 via-white to-indigo-50 border border-blue-200 rounded-lg p-4 relative overflow-hidden">
                     <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-indigo-500/5 pointer-events-none"></div>
                     <div className="relative flex items-start">
                       <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
                         <Target className="w-4 h-4 text-white" />
                       </div>
-                      {!gradingResult && (
-                                        <div>
+                      <div>
                         <h4 className="font-medium text-blue-900 mb-2">General Explanation:</h4>
                         <p className="text-blue-800 text-sm leading-relaxed">
                           {feedback.explanation}
                         </p>
                       </div>
-                      )}
                     </div>
                   </div>
+                  )}
                 </div>
               )}
             </div>
