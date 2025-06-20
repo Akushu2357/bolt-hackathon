@@ -55,7 +55,7 @@ export default function DetailedReview({
           const userAnswer = selectedAnswers[index];
           const isExpanded = expandedQuestion === index;
           const feedback = QuizScoringService.getAnswerFeedback(question, userAnswer, gradingResults);
-          const gradingResult = getGradingResult(question.index);
+          const gradingResult = getGradingResult(question[index]);
           
           return (
             <div key={question.id} className="border border-gray-200 rounded-lg overflow-hidden">
