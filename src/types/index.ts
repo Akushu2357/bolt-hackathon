@@ -6,6 +6,7 @@ export * from './table_chat_messages';
 export * from './table_quizzes';
 export * from './table_quiz_attempts';
 export * from './table_learning_progress';
+export * from './table_schedule';
 
 // Additional types
 export interface Question {
