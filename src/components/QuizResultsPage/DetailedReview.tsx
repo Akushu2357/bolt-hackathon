@@ -30,8 +30,8 @@ export default function DetailedReview({
   gradingResults 
 }: DetailedReviewProps) {
   
-  const getGradingResult = (questionText: string): GradedQuestion | undefined => {
-    return gradingResults?.find(result => result.question === questionText);
+  const getGradingResult = (question: string): GradedQuestion | undefined => {
+    return gradingResults?.find(result => result.id === question.id);
   };
 
   const getGradeColor = (grade: string) => {
