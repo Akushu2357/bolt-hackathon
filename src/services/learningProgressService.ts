@@ -118,8 +118,8 @@ export class LearningProgressService {
 
       if (existingProgress) {
         // Merge with existing weak areas and strengths
-        const mergedWeakAreas = [...new Set([...existingProgress.weak_areas, ...uniqueWeakAreas])];
-        const mergedStrengths = [...new Set([...existingProgress.strengths, ...uniqueStrengths])];
+        const mergedWeakAreas = [...new Set([uniqueWeakAreas])];
+        const mergedStrengths = [...new Set([uniqueStrengths])];
         
         // Update existing progress
         await supabase
