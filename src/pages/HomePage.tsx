@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { ScheduleService, CreateScheduleItem } from '../services/scheduleService';
+import { GuestLimitService } from '../services/guestLimitService';
 import { 
   MessageCircle, 
   FileQuestion, 
@@ -20,7 +22,9 @@ import {
   Users,
   Zap,
   Shield,
-  LogIn
+  LogIn,
+  Trash2,
+  Edit3
 } from 'lucide-react';
 
 interface DashboardStats {
@@ -34,7 +38,7 @@ interface StudyScheduleItem {
   id: string;
   title: string;
   subject: string;
-  day: string;
+  date: string;
   time: string;
   completed: boolean;
 }
@@ -53,21 +57,48 @@ export default function HomePage() {
   const [chatLoading, setChatLoading] = useState(false);
   const [studySchedule, setStudySchedule] = useState<StudyScheduleItem[]>([]);
   const [showScheduleForm, setShowScheduleForm] = useState(false);
-  const [newScheduleItem, setNewScheduleItem] = useState({
+  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
+  const [newScheduleItem, setNewScheduleItem] = useState<CreateScheduleItem>({
     title: '',
     subject: '',
-    day: '',
+    date: '',
     time: ''
   });
+  const [scheduleLoading, setScheduleLoading] = useState(false);
 
   useEffect(() => {
     if (user) {
       fetchDashboardStats();
       fetchStudySchedule();
     } else {
+      // For guest users, load mock data
+      loadGuestData();
       setLoading(false);
     }
   }, [user]);
+
+  const loadGuestData = () => {
+    // Mock data for guest users
+    const mockSchedule: StudyScheduleItem[] = [
+      {
+        id: 'guest-1',
+        title: 'Try AI Chat',
+        subject: 'Getting Started',
+        date: new Date().toISOString().split('T')[0],
+        time: '10:00',
+        completed: false
+      },
+      {
+        id: 'guest-2',
+        title: 'Take Sample Quiz',
+        subject: 'Assessment',
+        date: new Date().toISOString().split('T')[0],
+        time: '14:00',
+        completed: false
+      }
+    ];
+    setStudySchedule(mockSchedule);
+  };
 
   const fetchDashboardStats = async () => {
     try {
@@ -110,34 +141,28 @@ export default function HomePage() {
   };
 
   const fetchStudySchedule = async () => {
-    // Mock data for study schedule - in real app, this would come from database
-    const mockSchedule: StudyScheduleItem[] = [
-      {
-        id: '1',
-        title: 'Algebra Review',
-        subject: 'Mathematics',
-        day: 'Monday',
-        time: '10:00 AM',
-        completed: false
-      },
-      {
-        id: '2',
-        title: 'Physics Laws',
-        subject: 'Physics',
-        day: 'Tuesday',
-        time: '2:00 PM',
-        completed: true
-      },
-      {
-        id: '3',
-        title: 'Essay Writing',
-        subject: 'English',
-        day: 'Wednesday',
-        time: '11:00 AM',
-        completed: false
-      }
-    ];
-    setStudySchedule(mockSchedule);
+    if (!user) return;
+    
+    try {
+      setScheduleLoading(true);
+      const scheduleItems = await ScheduleService.fetchUpcomingScheduleItems(user, 10);
+      
+      // Convert to the format expected by the component
+      const formattedItems: StudyScheduleItem[] = scheduleItems.map(item => ({
+        id: item.id,
+        title: item.title,
+        subject: item.subject,
+        date: item.date,
+        time: item.time,
+        completed: item.completed
+      }));
+      
+      setStudySchedule(formattedItems);
+    } catch (error) {
+      console.error('Error fetching study schedule:', error);
+    } finally {
+      setScheduleLoading(false);
+    }
   };
 
   const handleChatSubmit = async (e: React.FormEvent) => {
@@ -180,27 +205,122 @@ export default function HomePage() {
     }
   };
 
-  const addScheduleItem = () => {
-    if (!newScheduleItem.title || !newScheduleItem.subject || !newScheduleItem.day || !newScheduleItem.time) return;
+  const addScheduleItem = async () => {
+    if (!newScheduleItem.title || !newScheduleItem.subject || !newScheduleItem.date || !newScheduleItem.time) return;
 
-    const newItem: StudyScheduleItem = {
-      id: Date.now().toString(),
-      ...newScheduleItem,
-      completed: false
-    };
+    if (user) {
+      // For authenticated users, use the ScheduleService
+      try {
+        setScheduleLoading(true);
+        await ScheduleService.createScheduleItem(user, newScheduleItem);
+        await fetchStudySchedule(); // Refresh the schedule
+        setNewScheduleItem({ title: '', subject: '', date: '', time: '' });
+        setShowScheduleForm(false);
+      } catch (error) {
+        console.error('Error creating schedule item:', error);
+      } finally {
+        setScheduleLoading(false);
+      }
+    } else {
+      // For guest users, add to local state
+      const newItem: StudyScheduleItem = {
+        id: `guest-${Date.now()}`,
+        ...newScheduleItem,
+        completed: false
+      };
 
-    setStudySchedule([...studySchedule, newItem]);
-    setNewScheduleItem({ title: '', subject: '', day: '', time: '' });
+      setStudySchedule([...studySchedule, newItem]);
+      setNewScheduleItem({ title: '', subject: '', date: '', time: '' });
+      setShowScheduleForm(false);
+    }
+  };
+
+  const toggleScheduleItem = async (id: string) => {
+    if (user) {
+      // For authenticated users, use the ScheduleService
+      try {
+        await ScheduleService.toggleScheduleItemCompletion(user, id);
+        await fetchStudySchedule(); // Refresh the schedule
+      } catch (error) {
+        console.error('Error toggling schedule item:', error);
+      }
+    } else {
+      // For guest users, update local state
+      setStudySchedule(schedule =>
+        schedule.map(item =>
+          item.id === id ? { ...item, completed: !item.completed } : item
+        )
+      );
+    }
+  };
+
+  const deleteScheduleItem = async (id: string) => {
+    if (user) {
+      // For authenticated users, use the ScheduleService
+      try {
+        setScheduleLoading(true);
+        await ScheduleService.deleteScheduleItem(user, id);
+        await fetchStudySchedule(); // Refresh the schedule
+      } catch (error) {
+        console.error('Error deleting schedule item:', error);
+      } finally {
+        setScheduleLoading(false);
+      }
+    } else {
+      // For guest users, remove from local state
+      setStudySchedule(schedule => schedule.filter(item => item.id !== id));
+    }
+  };
+
+  const startEditingScheduleItem = (item: StudyScheduleItem) => {
+    setEditingScheduleId(item.id);
+    setNewScheduleItem({
+      title: item.title,
+      subject: item.subject,
+      date: item.date,
+      time: item.time
+    });
+    setShowScheduleForm(true);
+  };
+
+  const updateScheduleItem = async () => {
+    if (!editingScheduleId || !newScheduleItem.title || !newScheduleItem.subject || !newScheduleItem.date || !newScheduleItem.time) return;
+
+    if (user) {
+      // For authenticated users, use the ScheduleService
+      try {
+        setScheduleLoading(true);
+        await ScheduleService.updateScheduleItem(user, editingScheduleId, newScheduleItem);
+        await fetchStudySchedule(); // Refresh the schedule
+        setNewScheduleItem({ title: '', subject: '', date: '', time: '' });
+        setShowScheduleForm(false);
+        setEditingScheduleId(null);
+      } catch (error) {
+        console.error('Error updating schedule item:', error);
+      } finally {
+        setScheduleLoading(false);
+      }
+    } else {
+      // For guest users, update local state
+      setStudySchedule(schedule =>
+        schedule.map(item =>
+          item.id === editingScheduleId ? { ...item, ...newScheduleItem } : item
+        )
+      );
+      setNewScheduleItem({ title: '', subject: '', date: '', time: '' });
+      setShowScheduleForm(false);
+      setEditingScheduleId(null);
+    }
+  };
+
+  const cancelScheduleForm = () => {
     setShowScheduleForm(false);
+    setEditingScheduleId(null);
+    setNewScheduleItem({ title: '', subject: '', date: '', time: '' });
   };
 
-  const toggleScheduleItem = (id: string) => {
-    setStudySchedule(schedule =>
-      schedule.map(item =>
-        item.id === id ? { ...item, completed: !item.completed } : item
-      )
-    );
-  };
+  // Get guest usage summary for display
+  const guestUsage = GuestLimitService.getUsageSummary();
 
   // Logged-out user view
   if (!user) {
@@ -244,7 +364,7 @@ export default function HomePage() {
                   </button>
                 </form>
                 <p className="text-primary-200 text-sm mt-3">
-                  Get 3-5 free chat requests • No signup required
+                  Get {guestUsage.chats.remaining} free chat requests • No signup required
                 </p>
               </div>
 
@@ -500,6 +620,7 @@ export default function HomePage() {
               <button
                 onClick={() => setShowScheduleForm(true)}
                 className="btn-primary flex items-center space-x-2 text-sm"
+                disabled={scheduleLoading}
               >
                 <Plus className="w-4 h-4" />
                 <span>Add Lesson</span>
@@ -508,7 +629,9 @@ export default function HomePage() {
 
             {showScheduleForm && (
               <div className="card mb-4 bg-gray-50">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Add New Study Session</h3>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">
+                  {editingScheduleId ? 'Edit Study Session' : 'Add New Study Session'}
+                </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                   <input
                     type="text"
@@ -539,13 +662,14 @@ export default function HomePage() {
                 </div>
                 <div className="flex space-x-3">
                   <button
-                    onClick={addScheduleItem}
+                    onClick={editingScheduleId ? updateScheduleItem : addScheduleItem}
                     className="btn-primary"
+                    disabled={scheduleLoading}
                   >
-                    Add Session
+                    {scheduleLoading ? 'Saving...' : editingScheduleId ? 'Update Session' : 'Add Session'}
                   </button>
                   <button
-                    onClick={() => setShowScheduleForm(false)}
+                    onClick={cancelScheduleForm}
                     className="btn-secondary"
                   >
                     Cancel
@@ -555,7 +679,12 @@ export default function HomePage() {
             )}
 
             <div className="card">
-              {studySchedule.length === 0 ? (
+              {scheduleLoading ? (
+                <div className="text-center py-8">
+                  <div className="w-8 h-8 border-2 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                  <p className="text-gray-600">Loading schedule...</p>
+                </div>
+              ) : studySchedule.length === 0 ? (
                 <div className="text-center py-8">
                   <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No study sessions scheduled</h3>
@@ -596,7 +725,7 @@ export default function HomePage() {
                             {item.title}
                           </h4>
                           <p className="text-sm text-gray-600">
-                            {item.subject} • {item.day} at {item.time}
+                            {item.subject} • {new Date(item.date).toLocaleDateString()} at {item.time}
                           </p>
                         </div>
                       </div>
@@ -605,6 +734,24 @@ export default function HomePage() {
                           <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
                             Completed
                           </span>
+                        )}
+                        {user && (
+                          <div className="flex space-x-1">
+                            <button
+                              onClick={() => startEditingScheduleItem(item)}
+                              className="p-1 text-gray-400 hover:text-primary-600 transition-colors"
+                              title="Edit"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => deleteScheduleItem(item.id)}
+                              className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
