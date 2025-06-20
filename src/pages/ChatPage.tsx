@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Send, Bot, User, Plus, MessageCircle, Trash2, Menu, X } from 'lucide-react';
+import { Send, Bot, User, Plus, MessageCircle, Trash2, Menu, X, LogIn } from 'lucide-react';
+import GuestLimitModal from '../components/common/GuestLimitModal';
+import { GuestLimitService } from '../services/guestLimitService';
 
 interface Message {
   id: string;
@@ -18,6 +21,8 @@ interface ChatSession {
 
 export default function ChatPage() {
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -25,13 +30,33 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false);
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [guestMessages, setGuestMessages] = useState<Message[]>([]);
+  const [showLimitModal, setShowLimitModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Check for initial message from URL params (for logged-out users)
+    const urlParams = new URLSearchParams(location.search);
+    const initialMessage = urlParams.get('message');
+    
+    if (initialMessage && !user) {
+      setInputMessage(initialMessage);
+      // Clear the URL parameter
+      navigate('/chat', { replace: true });
+    }
+
     if (user) {
       fetchSessions();
+    } else {
+      // For guest users, load from localStorage
+      const savedGuestMessages = localStorage.getItem('guestMessages');
+      
+      if (savedGuestMessages) {
+        setGuestMessages(JSON.parse(savedGuestMessages));
+      }
+      setLoadingSessions(false);
     }
-  }, [user]);
+  }, [user, location.search, navigate]);
 
   useEffect(() => {
     if (currentSession) {
@@ -41,7 +66,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, guestMessages]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -84,11 +109,13 @@ export default function ChatPage() {
   };
 
   const createNewSession = async () => {
+    if (!user) return;
+
     try {
       const { data, error } = await supabase
         .from('chat_sessions')
         .insert({
-          user_id: user!.id,
+          user_id: user.id,
           title: 'New Chat Session'
         })
         .select()
@@ -107,6 +134,8 @@ export default function ChatPage() {
   };
 
   const deleteSession = async (sessionId: string) => {
+    if (!user) return;
+
     try {
       await supabase
         .from('chat_messages')
@@ -131,62 +160,99 @@ export default function ChatPage() {
   };
 
   const sendMessage = async () => {
-    if (!inputMessage.trim() || !currentSession || loading) return;
+    if (!inputMessage.trim() || loading) return;
+
+    // Check guest limits
+    if (!user && !GuestLimitService.canPerformAction('chat')) {
+      setShowLimitModal(true);
+      return;
+    }
 
     const userMessage = inputMessage.trim();
     setInputMessage('');
     setLoading(true);
 
     try {
-      const userMsg: Message = {
-        id: Date.now().toString(),
-        role: 'user',
-        content: userMessage,
-        created_at: new Date().toISOString()
-      };
-      setMessages(prev => [...prev, userMsg]);
-
-      await supabase
-        .from('chat_messages')
-        .insert({
-          session_id: currentSession.id,
+      if (user && currentSession) {
+        // Logged-in user flow
+        const userMsg: Message = {
+          id: Date.now().toString(),
           role: 'user',
-          content: userMessage
-        });
+          content: userMessage,
+          created_at: new Date().toISOString()
+        };
+        setMessages(prev => [...prev, userMsg]);
 
-      const aiResponse = await generateAIResponse(userMessage);
-      
-      const aiMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: aiResponse,
-        created_at: new Date().toISOString()
-      };
-      setMessages(prev => [...prev, aiMsg]);
-
-      await supabase
-        .from('chat_messages')
-        .insert({
-          session_id: currentSession.id,
-          role: 'assistant',
-          content: aiResponse
-        });
-
-      if (messages.length === 0) {
-        const title = userMessage.length > 50 
-          ? userMessage.substring(0, 50) + '...' 
-          : userMessage;
-        
         await supabase
-          .from('chat_sessions')
-          .update({ title })
-          .eq('id', currentSession.id);
+          .from('chat_messages')
+          .insert({
+            session_id: currentSession.id,
+            role: 'user',
+            content: userMessage
+          });
 
-        setSessions(prev => 
-          prev.map(s => s.id === currentSession.id ? { ...s, title } : s)
-        );
+        const aiResponse = await generateAIResponse(userMessage);
+        
+        const aiMsg: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: aiResponse,
+          created_at: new Date().toISOString()
+        };
+        setMessages(prev => [...prev, aiMsg]);
+
+        await supabase
+          .from('chat_messages')
+          .insert({
+            session_id: currentSession.id,
+            role: 'assistant',
+            content: aiResponse
+          });
+
+        if (messages.length === 0) {
+          const title = userMessage.length > 50 
+            ? userMessage.substring(0, 50) + '...' 
+            : userMessage;
+          
+          await supabase
+            .from('chat_sessions')
+            .update({ title })
+            .eq('id', currentSession.id);
+
+          setSessions(prev => 
+            prev.map(s => s.id === currentSession.id ? { ...s, title } : s)
+          );
+        }
+      } else {
+        // Guest user flow
+        const userMsg: Message = {
+          id: Date.now().toString(),
+          role: 'user',
+          content: userMessage,
+          created_at: new Date().toISOString()
+        };
+
+        const newGuestMessages = [...guestMessages, userMsg];
+        setGuestMessages(newGuestMessages);
+
+        const aiResponse = await generateAIResponse(userMessage);
+        
+        const aiMsg: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: aiResponse,
+          created_at: new Date().toISOString()
+        };
+
+        const finalMessages = [...newGuestMessages, aiMsg];
+        setGuestMessages(finalMessages);
+
+        // Increment guest usage
+        GuestLimitService.incrementUsage('chat');
+
+        // Save to localStorage
+        localStorage.setItem('guestMessages', JSON.stringify(finalMessages));
       }
-
     } catch (error) {
       console.error('Error sending message:', error);
     } finally {
@@ -215,12 +281,16 @@ export default function ChatPage() {
     }
   };
 
+  const displayMessages = user ? messages : guestMessages;
+  const canSendMessage = user || GuestLimitService.canPerformAction('chat');
+  const guestUsage = GuestLimitService.getUsageSummary();
+
   if (loadingSessions) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
           <div className="w-8 h-8 border-2 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading chat sessions...</p>
+          <p className="text-gray-600">Loading chat...</p>
         </div>
       </div>
     );
@@ -240,73 +310,75 @@ export default function ChatPage() {
             </button>
           </div>
 
-          {/* Sidebar */}
-          <div className={`${showSidebar ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 fixed lg:relative inset-y-0 left-0 z-50 w-80 bg-white border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out lg:transition-none`}>
-            {/* Sidebar Header */}
-            <div className="p-4 border-b border-gray-200">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">Chats</h2>
+          {/* Sidebar - Only show for logged-in users */}
+          {user && (
+            <div className={`${showSidebar ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 fixed lg:relative inset-y-0 left-0 z-50 w-80 bg-white border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out lg:transition-none`}>
+              {/* Sidebar Header */}
+              <div className="p-4 border-b border-gray-200">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-gray-900">Chats</h2>
+                  <button
+                    onClick={() => setShowSidebar(false)}
+                    className="lg:hidden p-1 hover:bg-gray-100 rounded"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
                 <button
-                  onClick={() => setShowSidebar(false)}
-                  className="lg:hidden p-1 hover:bg-gray-100 rounded"
+                  onClick={createNewSession}
+                  className="w-full btn-primary flex items-center justify-center space-x-2"
                 >
-                  <X className="w-5 h-5" />
+                  <Plus className="w-4 h-4" />
+                  <span>New Chat</span>
                 </button>
               </div>
-              <button
-                onClick={createNewSession}
-                className="w-full btn-primary flex items-center justify-center space-x-2"
-              >
-                <Plus className="w-4 h-4" />
-                <span>New Chat</span>
-              </button>
-            </div>
-            
-            {/* Sessions List */}
-            <div className="flex-1 overflow-y-auto">
-              {sessions.length === 0 ? (
-                <div className="p-4 text-center text-gray-500">
-                  <MessageCircle className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                  <p className="text-sm">No chat sessions yet</p>
-                </div>
-              ) : (
-                <div className="p-2">
-                  {sessions.map((session) => (
-                    <div
-                      key={session.id}
-                      className={`group flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors duration-200 ${
-                        currentSession?.id === session.id
-                          ? 'bg-primary-50 text-primary-700'
-                          : 'hover:bg-gray-50'
-                      }`}
-                      onClick={() => {
-                        setCurrentSession(session);
-                        setShowSidebar(false);
-                      }}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {session.title}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {new Date(session.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteSession(session.id);
+              
+              {/* Sessions List */}
+              <div className="flex-1 overflow-y-auto">
+                {sessions.length === 0 ? (
+                  <div className="p-4 text-center text-gray-500">
+                    <MessageCircle className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                    <p className="text-sm">No chat sessions yet</p>
+                  </div>
+                ) : (
+                  <div className="p-2">
+                    {sessions.map((session) => (
+                      <div
+                        key={session.id}
+                        className={`group flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors duration-200 ${
+                          currentSession?.id === session.id
+                            ? 'bg-primary-50 text-primary-700'
+                            : 'hover:bg-gray-50'
+                        }`}
+                        onClick={() => {
+                          setCurrentSession(session);
+                          setShowSidebar(false);
                         }}
-                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 rounded transition-all duration-200"
                       >
-                        <Trash2 className="w-4 h-4 text-red-500" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {session.title}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {new Date(session.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteSession(session.id);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 rounded transition-all duration-200"
+                        >
+                          <Trash2 className="w-4 h-4 text-red-500" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Overlay for mobile */}
           {showSidebar && (
@@ -318,123 +390,142 @@ export default function ChatPage() {
 
           {/* Chat Area */}
           <div className="flex-1 flex flex-col min-w-0">
-            {currentSession ? (
-              <>
-                {/* Chat Header */}
-                <div className="p-4 border-b border-gray-200 bg-white">
-                  <h3 className="font-semibold text-gray-900 truncate pl-12 lg:pl-0">
-                    {currentSession.title}
-                  </h3>
-                </div>
-
-                {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                  {messages.length === 0 ? (
-                    <div className="text-center py-8 sm:py-12">
-                      <Bot className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">
-                        Start a conversation
-                      </h3>
-                      <p className="text-gray-600">
-                        Ask me anything! I'm here to help you learn.
-                      </p>
-                    </div>
-                  ) : (
-                    messages.map((message) => (
-                      <div
-                        key={message.id}
-                        className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                      >
-                        <div className={`flex max-w-[85%] sm:max-w-3xl ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                          <div className={`flex-shrink-0 ${message.role === 'user' ? 'ml-2 sm:ml-3' : 'mr-2 sm:mr-3'}`}>
-                            <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center ${
-                              message.role === 'user' 
-                                ? 'bg-primary-600' 
-                                : 'bg-gray-200'
-                            }`}>
-                              {message.role === 'user' ? (
-                                <User className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
-                              ) : (
-                                <Bot className="w-3 h-3 sm:w-4 sm:h-4 text-gray-600" />
-                              )}
-                            </div>
-                          </div>
-                          <div className={`px-3 py-2 sm:px-4 sm:py-2 rounded-lg ${
-                            message.role === 'user'
-                              ? 'bg-primary-600 text-white'
-                              : 'bg-gray-100 text-gray-900'
-                          }`}>
-                            <p className="whitespace-pre-wrap text-sm sm:text-base">{message.content}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                  {loading && (
-                    <div className="flex justify-start">
-                      <div className="flex max-w-3xl">
-                        <div className="flex-shrink-0 mr-2 sm:mr-3">
-                          <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                            <Bot className="w-3 h-3 sm:w-4 sm:h-4 text-gray-600" />
-                          </div>
-                        </div>
-                        <div className="px-3 py-2 sm:px-4 sm:py-2 rounded-lg bg-gray-100">
-                          <div className="flex space-x-1">
-                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  <div ref={messagesEndRef} />
-                </div>
-
-                {/* Input */}
-                <div className="border-t border-gray-200 p-4">
-                  <div className="flex space-x-2 sm:space-x-4">
-                    <textarea
-                      value={inputMessage}
-                      onChange={(e) => setInputMessage(e.target.value)}
-                      onKeyPress={handleKeyPress}
-                      placeholder="Ask me anything..."
-                      className="flex-1 resize-none input-field text-sm sm:text-base"
-                      rows={1}
-                      disabled={loading}
-                    />
+            {/* Chat Header */}
+            <div className="p-4 border-b border-gray-200 bg-white">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-gray-900 truncate pl-12 lg:pl-0">
+                  {user ? (currentSession?.title || 'AI Tutor Chat') : 'AI Tutor Chat (Guest Mode)'}
+                </h3>
+                {!user && (
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-gray-600">
+                      {guestUsage.chats.remaining}/{guestUsage.chats.total} free chats left
+                    </span>
                     <button
-                      onClick={sendMessage}
-                      disabled={!inputMessage.trim() || loading}
-                      className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed px-3 sm:px-4"
+                      onClick={() => navigate('/auth')}
+                      className="btn-primary text-sm flex items-center space-x-1"
                     >
-                      <Send className="w-4 h-4" />
+                      <LogIn className="w-4 h-4" />
+                      <span>Login</span>
                     </button>
                   </div>
-                </div>
-              </>
-            ) : (
-              <div className="flex-1 flex items-center justify-center p-4">
-                <div className="text-center">
-                  <MessageCircle className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-4" />
+                )}
+              </div>
+            </div>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {displayMessages.length === 0 ? (
+                <div className="text-center py-8 sm:py-12">
+                  <Bot className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    No chat selected
+                    {user ? 'Start a conversation' : 'Welcome to TutorAI!'}
                   </h3>
-                  <p className="text-gray-600 mb-4 text-sm sm:text-base">
-                    Create a new chat session to get started
+                  <p className="text-gray-600">
+                    {user 
+                      ? 'Ask me anything! I\'m here to help you learn.'
+                      : `You have ${guestUsage.chats.remaining} free chat${guestUsage.chats.remaining !== 1 ? 's' : ''} remaining. Login for unlimited access!`
+                    }
+                  </p>
+                </div>
+              ) : (
+                displayMessages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div className={`flex max-w-[85%] sm:max-w-3xl ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                      <div className={`flex-shrink-0 ${message.role === 'user' ? 'ml-2 sm:ml-3' : 'mr-2 sm:mr-3'}`}>
+                        <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center ${
+                          message.role === 'user' 
+                            ? 'bg-primary-600' 
+                            : 'bg-gray-200'
+                        }`}>
+                          {message.role === 'user' ? (
+                            <User className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
+                          ) : (
+                            <Bot className="w-3 h-3 sm:w-4 sm:h-4 text-gray-600" />
+                          )}
+                        </div>
+                      </div>
+                      <div className={`px-3 py-2 sm:px-4 sm:py-2 rounded-lg ${
+                        message.role === 'user'
+                          ? 'bg-primary-600 text-white'
+                          : 'bg-gray-100 text-gray-900'
+                      }`}>
+                        <p className="whitespace-pre-wrap text-sm sm:text-base">{message.content}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+              {loading && (
+                <div className="flex justify-start">
+                  <div className="flex max-w-3xl">
+                    <div className="flex-shrink-0 mr-2 sm:mr-3">
+                      <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                        <Bot className="w-3 h-3 sm:w-4 sm:h-4 text-gray-600" />
+                      </div>
+                    </div>
+                    <div className="px-3 py-2 sm:px-4 sm:py-2 rounded-lg bg-gray-100">
+                      <div className="flex space-x-1">
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input */}
+            <div className="border-t border-gray-200 p-4">
+              {!canSendMessage ? (
+                <div className="text-center py-4">
+                  <p className="text-gray-600 mb-4">
+                    You've used all {guestUsage.chats.total} free chats. Login to continue chatting!
                   </p>
                   <button
-                    onClick={createNewSession}
-                    className="btn-primary"
+                    onClick={() => navigate('/auth')}
+                    className="btn-primary flex items-center justify-center space-x-2 mx-auto"
                   >
-                    Start New Chat
+                    <LogIn className="w-4 h-4" />
+                    <span>Login for Unlimited Access</span>
                   </button>
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="flex space-x-2 sm:space-x-4">
+                  <textarea
+                    value={inputMessage}
+                    onChange={(e) => setInputMessage(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder="Ask me anything..."
+                    className="flex-1 resize-none input-field text-sm sm:text-base"
+                    rows={1}
+                    disabled={loading}
+                  />
+                  <button
+                    onClick={sendMessage}
+                    disabled={!inputMessage.trim() || loading}
+                    className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed px-3 sm:px-4"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Guest Limit Modal */}
+      <GuestLimitModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        limitType="chat"
+      />
     </div>
   );
 }
