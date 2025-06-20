@@ -256,12 +256,14 @@ export default function DetailedReview({
                       <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
                         <Target className="w-4 h-4 text-white" />
                       </div>
-                      <div>
+                      {!gradingResult && (
+                                        <div>
                         <h4 className="font-medium text-blue-900 mb-2">General Explanation:</h4>
                         <p className="text-blue-800 text-sm leading-relaxed">
                           {feedback.explanation}
                         </p>
                       </div>
+                      )}
                     </div>
                   </div>
                 </div>
