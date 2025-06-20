@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { 
   Plus, 
   Play, 
@@ -17,14 +17,23 @@ import {
   LogIn,
   Lock
 } from 'lucide-react';
+import QuizHeader from '../components/QuizPage/QuizHeader';
+import QuizQuestion from '../components/QuizPage/QuizQuestion';
+import QuizList from '../components/QuizPage/QuizList';
+import CreateQuizForm from '../components/QuizPage/CreateQuizForm';
+import RecentAttemptsSidebar from '../components/QuizPage/RecentAttemptsSidebar';
+import { QuizService, QuizSettings } from '../services/quizService';
+import { QuizDataService } from '../services/quizDataService';
+import { QuizScoringService } from '../services/quizScoringService';
+import { LearningProgressService } from '../services/learningProgressService';
 
 interface Question {
   id: string;
-  type: 'single' | 'multiple' | 'true_false' | 'open_answer';
+  type: 'single' | 'multiple' | 'true_false' | 'open_ended';
   question: string;
   options?: string[];
   explanation: string;
-  correct_answer: number[];
+  correct_answer: number[] | string | boolean;
 }
 
 interface Quiz {
@@ -49,13 +58,13 @@ interface QuizAttempt {
 
 export default function QuizPage() {
   const { user } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [attempts, setAttempts] = useState<QuizAttempt[]>([]);
   const [currentQuiz, setCurrentQuiz] = useState<Quiz | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [selectedAnswers, setSelectedAnswers] = useState<(number[] | string)[]>([]);
-  const [showResults, setShowResults] = useState(false);
+  const [selectedAnswers, setSelectedAnswers] = useState<(number[] | string | boolean)[]>([]);
   const [loading, setLoading] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newQuizTopic, setNewQuizTopic] = useState('');
@@ -63,7 +72,16 @@ export default function QuizPage() {
   const [showSidebar, setShowSidebar] = useState(false);
   const [guestQuizzes, setGuestQuizzes] = useState<Quiz[]>([]);
   const [showAnswersBlocked, setShowAnswersBlocked] = useState(false);
-
+  const [quizSettings, setQuizSettings] = useState<QuizSettings>({
+    numberOfQuestions: 5,
+    numberOfChoices: 4,
+    questionTypes: {
+      multipleChoice: true,
+      trueFalse: false,
+      openEnded: false
+    }
+  });
+  
   useEffect(() => {
     if (user) {
       fetchQuizzes();
@@ -75,6 +93,7 @@ export default function QuizPage() {
   }, [user]);
 
   const loadGuestQuizzes = () => {
+    // updata use api
     // Create some sample quizzes for guest users
     const sampleQuizzes: Quiz[] = [
       {
@@ -96,129 +115,90 @@ export default function QuizPage() {
     ];
     setGuestQuizzes(sampleQuizzes);
   };
+  
+  // Handle starting a quiz from navigation state
+  useEffect(() => {
+    if (location.state?.startQuiz) {
+      startQuiz(location.state.startQuiz);
+      // Clear the state to prevent re-triggering
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.state, navigate]);
 
   const fetchQuizzes = async () => {
+    if (!user) return;
     try {
-      const { data, error } = await supabase
-        .from('quizzes')
-        .select('*')
-        .eq('user_id', user!.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setQuizzes(data || []);
+      const data = await QuizDataService.fetchQuizzes(user);
+      setQuizzes(data);
     } catch (error) {
       console.error('Error fetching quizzes:', error);
     }
   };
 
   const fetchAttempts = async () => {
+    if (!user) return;
     try {
-      const { data, error } = await supabase
-        .from('quiz_attempts')
-        .select(`
-          *,
-          quiz:quizzes(title, topic)
-        `)
-        .eq('user_id', user!.id)
-        .order('completed_at', { ascending: false })
-        .limit(5);
-
-      if (error) throw error;
-      setAttempts(data || []);
+      const data = await QuizDataService.fetchAttempts(user);
+      setAttempts(data);
     } catch (error) {
       console.error('Error fetching attempts:', error);
     }
   };
 
   const generateQuiz = async () => {
-    if (!newQuizTopic.trim()) return;
+    if (!newQuizTopic.trim() || !user) return;
 
     setLoading(true);
     try {
-      const questions: Question[] = generateMockQuestions(newQuizTopic, newQuizDifficulty);
+      // Get user's weak areas for this topic to focus on
+      const weakAreas = await QuizService.getUserWeakAreas(user.id, newQuizTopic);
       
       if (user) {
-        const { data, error } = await supabase
-          .from('quizzes')
-          .insert({
-            user_id: user.id,
-            title: `${newQuizTopic} Quiz`,
-            topic: newQuizTopic,
-            difficulty: newQuizDifficulty,
-            questions: questions
-          })
-          .select()
-          .single();
+      // Generate questions using the quiz service
+      const response = await QuizService.generateQuestions({
+        topic: newQuizTopic,
+        difficulty: newQuizDifficulty,
+        contexts: weakAreas.slice(0, 3), // Use top 3 weak areas as context
+        settings: quizSettings
+      });
 
-        if (error) throw error;
-        setQuizzes([data, ...quizzes]);
-      } else {
-        // For guest users, add to local state
-        const newQuiz: Quiz = {
-          id: `guest-${Date.now()}`,
-          title: `${newQuizTopic} Quiz`,
-          topic: newQuizTopic,
-          difficulty: newQuizDifficulty,
-          questions: questions,
-          created_at: new Date().toISOString()
-        };
-        setGuestQuizzes([newQuiz, ...guestQuizzes]);
+      // Save the quiz to database
+      const savedQuiz = await QuizDataService.saveQuiz(
+        user.id,
+        `${newQuizTopic} Quiz`,
+        newQuizTopic,
+        newQuizDifficulty,
+        response.questions
+      );
       }
 
+      setQuizzes([savedQuiz, ...quizzes]);
       setShowCreateForm(false);
       setNewQuizTopic('');
     } catch (error) {
       console.error('Error generating quiz:', error);
+      // You might want to show an error message to the user here
     } finally {
       setLoading(false);
     }
   };
 
-  const generateMockQuestions = (topic: string, difficulty: string): Question[] => {
-    return [
-      {
-        id: 'q1',
-        type: 'single',
-        question: `What is the most fundamental concept in ${topic}?`,
-        options: ['Basic principle A', 'Basic principle B', 'Basic principle C', 'Basic principle D'],
-        correct_answer: [0],
-        explanation: `This is the correct answer because it represents the core principle of ${topic}.`
-      },
-      {
-        id: 'q2',
-        type: 'multiple',
-        question: `Which of the following are important aspects of ${topic}? (Select all that apply)`,
-        options: ['Aspect A', 'Aspect B', 'Aspect C', 'Aspect D'],
-        correct_answer: [0, 2],
-        explanation: `Aspects A and C are both crucial components of ${topic}.`
-      },
-      {
-        id: 'q3',
-        type: 'true_false',
-        question: `${topic} is considered a fundamental subject in modern education.`,
-        options: ['True', 'False'],
-        correct_answer: [0],
-        explanation: `This statement is true because ${topic} plays a vital role in education.`
-      },
-      {
-        id: 'q4',
-        type: 'open_answer',
-        question: `Explain in your own words why ${topic} is important in today's world.`,
-        correct_answer: [],
-        explanation: `This is an open-ended question designed to test your understanding and ability to articulate the importance of ${topic}.`
-      }
-    ];
-  };
-
   const startQuiz = (quiz: Quiz) => {
     setCurrentQuiz(quiz);
     setCurrentQuestionIndex(0);
-    const initialAnswers = quiz.questions.map(question => 
-      question.type === 'open_answer' ? '' : []
-    );
+    // Initialize answers based on question type
+    const initialAnswers = quiz.questions.map(question => {
+      switch (question.type) {
+        case 'open_ended':
+          return '';
+        case 'true_false':
+          // update
+          return false;
+        default:
+          return [];
+      }
+    });
     setSelectedAnswers(initialAnswers);
-    setShowResults(false);
     setShowSidebar(false);
   };
 
@@ -242,6 +222,12 @@ export default function QuizPage() {
     setSelectedAnswers(newAnswers);
   };
 
+  const selectTrueFalseAnswer = (value: boolean) => {
+    const newAnswers = [...selectedAnswers];
+    newAnswers[currentQuestionIndex] = value;
+    setSelectedAnswers(newAnswers);
+  };
+
   const setOpenAnswer = (answer: string) => {
     const newAnswers = [...selectedAnswers];
     newAnswers[currentQuestionIndex] = answer;
@@ -257,131 +243,43 @@ export default function QuizPage() {
   };
 
   const finishQuiz = async () => {
-    if (!currentQuiz) return;
-
-    const score = calculateScore();
-    
-    if (!user) {
-      // For guest users, show results but block detailed analysis
-      setShowResults(true);
-      setShowAnswersBlocked(true);
-      return;
-    }
-
-    try {
-      await supabase
-        .from('quiz_attempts')
-        .insert({
-          quiz_id: currentQuiz.id,
-          user_id: user.id,
-          answers: selectedAnswers,
-          score: score
-        });
-
-      await updateLearningProgress(score);
-      
-      setShowResults(true);
-      fetchAttempts();
-    } catch (error) {
-      console.error('Error saving quiz attempt:', error);
-    }
-  };
-
-  const calculateScore = (): number => {
-    if (!currentQuiz) return 0;
-    
-    let correct = 0;
-    let totalQuestions = 0;
-
-    currentQuiz.questions.forEach((question, index) => {
-      if (question.type === 'open_answer') {
-        const answer = selectedAnswers[index];
-        if (typeof answer === 'string' && answer.trim().length > 0) {
-          correct += 0.5;
-        }
-      } else {
-        totalQuestions++;
-        const userAnswer = selectedAnswers[index] as number[];
-        const correctAnswer = question.correct_answer;
-        
-        if (question.type === 'single' || question.type === 'true_false') {
-          if (userAnswer.length === 1 && userAnswer[0] === correctAnswer[0]) {
-            correct++;
-          }
-        } else if (question.type === 'multiple') {
-          const userSet = new Set(userAnswer);
-          const correctSet = new Set(correctAnswer);
-          if (userSet.size === correctSet.size && 
-              [...userSet].every(x => correctSet.has(x))) {
-            correct++;
-          }
-        }
-      }
-    });
-    
-    return Math.round((correct / Math.max(totalQuestions, currentQuiz.questions.length)) * 100);
-  };
-
-  const updateLearningProgress = async (score: number) => {
     if (!currentQuiz || !user) return;
 
-    const weakAreas: string[] = [];
-    const strengths: string[] = [];
-
-    currentQuiz.questions.forEach((question, index) => {
-      if (question.type !== 'open_answer') {
-        const userAnswer = selectedAnswers[index] as number[];
-        const correctAnswer = question.correct_answer;
-        let isCorrect = false;
-
-        if (question.type === 'single' || question.type === 'true_false') {
-          isCorrect = userAnswer.length === 1 && userAnswer[0] === correctAnswer[0];
-        } else if (question.type === 'multiple') {
-          const userSet = new Set(userAnswer);
-          const correctSet = new Set(correctAnswer);
-          isCorrect = userSet.size === correctSet.size && 
-                     [...userSet].every(x => correctSet.has(x));
-        }
-
-        if (isCorrect) {
-          strengths.push(`${currentQuiz.topic} - Question ${index + 1}`);
-        } else {
-          weakAreas.push(`${currentQuiz.topic} - Question ${index + 1}`);
-        }
-      }
-    });
-
     try {
-      const { data: existingProgress } = await supabase
-        .from('learning_progress')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('topic', currentQuiz.topic)
-        .single();
+      // Calculate score using the scoring service
+      const scoringResult = await QuizScoringService.calculateScore(currentQuiz, selectedAnswers);
+      
+      // Save quiz attempt
+      await QuizDataService.saveQuizAttempt(
+        currentQuiz.id,
+        user.id,
+        selectedAnswers,
+        scoringResult.score
+      );
 
-      if (existingProgress) {
-        await supabase
-          .from('learning_progress')
-          .update({
-            weak_areas: [...new Set([...existingProgress.weak_areas, ...weakAreas])],
-            strengths: [...new Set([...existingProgress.strengths, ...strengths])],
-            progress_score: Math.max(existingProgress.progress_score, score),
-            last_updated: new Date().toISOString()
-          })
-          .eq('id', existingProgress.id);
-      } else {
-        await supabase
-          .from('learning_progress')
-          .insert({
-            user_id: user.id,
-            topic: currentQuiz.topic,
-            weak_areas: weakAreas,
-            strengths: strengths,
-            progress_score: score
-          });
-      }
+      // Update learning progress
+      await LearningProgressService.updateLearningProgress(
+        user.id,
+        currentQuiz,
+        selectedAnswers,
+        scoringResult.score,
+        scoringResult.gradingResults
+      );
+      
+      // Navigate to results page with quiz data
+      navigate('/quiz-results', {
+        state: {
+          quiz: currentQuiz,
+          selectedAnswers: selectedAnswers,
+          score: scoringResult.score,
+          gradingResults: scoringResult.gradingResults
+        }
+      });
+      
+      fetchAttempts();
+      setShowResults(true);
     } catch (error) {
-      console.error('Error updating learning progress:', error);
+      console.error('Error finishing quiz:', error);
     }
   };
 
@@ -406,10 +304,13 @@ export default function QuizPage() {
     const currentAnswer = selectedAnswers[currentQuestionIndex];
     const currentQuestion = currentQuiz!.questions[currentQuestionIndex];
     
-    if (currentQuestion.type === 'open_answer') {
-      return typeof currentAnswer === 'string' && currentAnswer.trim().length > 0;
-    } else {
-      return Array.isArray(currentAnswer) && currentAnswer.length > 0;
+    switch (currentQuestion.type) {
+      case 'open_ended':
+        return typeof currentAnswer === 'string' && currentAnswer.trim().length > 0;
+      case 'true_false':
+        return typeof currentAnswer === 'boolean';
+      default:
+        return Array.isArray(currentAnswer) && currentAnswer.length > 0;
     }
   };
 
@@ -418,7 +319,6 @@ export default function QuizPage() {
 
     switch (question.type) {
       case 'single':
-      case 'true_false':
         return (
           <div className="space-y-3">
             {question.options?.map((option, index) => (
@@ -479,7 +379,40 @@ export default function QuizPage() {
           </div>
         );
 
-      case 'open_answer':
+      case 'true_false':
+        return (
+          <div className="space-y-3">
+            {['True', 'False'].map((option, index) => {
+              const value = index === 0;
+              return (
+                <button
+                  key={index}
+                  onClick={() => selectTrueFalseAnswer(value)}
+                  className={`w-full text-left p-4 rounded-lg border-2 transition-all duration-200 ${
+                    currentAnswer === value
+                      ? 'border-primary-500 bg-primary-50'
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center">
+                    <div className={`w-6 h-6 rounded-full border-2 mr-3 flex items-center justify-center ${
+                      currentAnswer === value
+                        ? 'border-primary-500 bg-primary-500'
+                        : 'border-gray-300'
+                    }`}>
+                      {currentAnswer === value && (
+                        <div className="w-2 h-2 bg-white rounded-full"></div>
+                      )}
+                    </div>
+                    <span className="text-gray-900">{option}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        );
+
+      case 'open_ended':
         return (
           <div>
             <textarea
@@ -499,6 +432,7 @@ export default function QuizPage() {
     }
   };
 
+  // update
   const availableQuizzes = user ? quizzes : guestQuizzes;
 
   if (currentQuiz && !showResults) {
@@ -510,58 +444,20 @@ export default function QuizPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200">
             {/* Quiz Header */}
-            <div className="p-4 sm:p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between mb-4">
-                <div className="min-w-0 flex-1">
-                  <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">
-                    {currentQuiz.title}
-                  </h1>
-                  <p className="text-sm sm:text-base text-gray-600">
-                    Question {currentQuestionIndex + 1} of {currentQuiz.questions.length}
-                  </p>
-                </div>
-                <button
-                  onClick={resetQuiz}
-                  className="btn-secondary text-sm px-3 py-2 sm:px-4 sm:py-2"
-                >
-                  <span className="hidden sm:inline">Exit Quiz</span>
-                  <X className="w-4 h-4 sm:hidden" />
-                </button>
-              </div>
-
-              {/* Progress Bar */}
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-primary-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${progress}%` }}
-                ></div>
-              </div>
-            </div>
-
+            <QuizHeader
+              title={currentQuiz.title}
+              current={currentQuestionIndex + 1}
+              total={currentQuiz.questions.length}
+              progress={progress}
+              onExit={resetQuiz}
+            />
             {/* Question Content */}
             <div className="p-4 sm:p-6">
-              <div className="mb-6 sm:mb-8">
-                <div className="flex items-start space-x-3 mb-4">
-                  <div className={`px-2 py-1 rounded text-xs font-medium ${
-                    currentQuestion.type === 'single' ? 'bg-blue-100 text-blue-700' :
-                    currentQuestion.type === 'multiple' ? 'bg-green-100 text-green-700' :
-                    currentQuestion.type === 'true_false' ? 'bg-purple-100 text-purple-700' :
-                    'bg-orange-100 text-orange-700'
-                  }`}>
-                    {currentQuestion.type === 'single' ? 'Single Choice' :
-                     currentQuestion.type === 'multiple' ? 'Multiple Choice' :
-                     currentQuestion.type === 'true_false' ? 'True/False' :
-                     'Open Answer'}
-                  </div>
-                </div>
-                
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-6">
-                  {currentQuestion.question}
-                </h2>
-
-                {renderQuestionInput(currentQuestion)}
-              </div>
-
+              <QuizQuestion
+                question={currentQuestion}
+                currentAnswer={selectedAnswers[currentQuestionIndex]}
+                renderInput={renderQuestionInput}
+              />
               {/* Navigation */}
               <div className="flex flex-col sm:flex-row justify-between space-y-3 sm:space-y-0 sm:space-x-4">
                 <button
@@ -586,24 +482,7 @@ export default function QuizPage() {
     );
   }
 
-  if (showResults && currentQuiz) {
-    const score = calculateScore();
-    const correctAnswers = currentQuiz.questions.filter((q, index) => {
-      if (q.type === 'open_answer') return true;
-      const userAnswer = selectedAnswers[index] as number[];
-      const correctAnswer = q.correct_answer;
-      
-      if (q.type === 'single' || q.type === 'true_false') {
-        return userAnswer.length === 1 && userAnswer[0] === correctAnswer[0];
-      } else if (q.type === 'multiple') {
-        const userSet = new Set(userAnswer);
-        const correctSet = new Set(correctAnswer);
-        return userSet.size === correctSet.size && 
-               [...userSet].every(x => correctSet.has(x));
-      }
-      return false;
-    }).length;
-
+  {/* <<<<<<< main
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
@@ -675,6 +554,7 @@ export default function QuizPage() {
     );
   }
 
+=======*/}
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
@@ -715,52 +595,21 @@ export default function QuizPage() {
 
         {/* Create Quiz Form */}
         {showCreateForm && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-6 sm:mb-8">
-            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">Generate New Quiz</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Topic
-                </label>
-                <input
-                  type="text"
-                  value={newQuizTopic}
-                  onChange={(e) => setNewQuizTopic(e.target.value)}
-                  placeholder="e.g., Mathematics, Physics, History"
-                  className="input-field"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Difficulty
-                </label>
-                <select
-                  value={newQuizDifficulty}
-                  onChange={(e) => setNewQuizDifficulty(e.target.value as 'easy' | 'medium' | 'hard')}
-                  className="input-field"
-                >
-                  <option value="easy">Easy</option>
-                  <option value="medium">Medium</option>
-                  <option value="hard">Hard</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
-              <button
-                onClick={generateQuiz}
-                disabled={!newQuizTopic.trim() || loading}
-                className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? 'Generating...' : 'Generate Quiz'}
-              </button>
-              <button
-                onClick={() => setShowCreateForm(false)}
-                className="btn-secondary"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
+          <CreateQuizForm
+            topic={newQuizTopic}
+            difficulty={newQuizDifficulty}
+            loading={loading}
+            onTopicChange={setNewQuizTopic}
+            onDifficultyChange={setNewQuizDifficulty}
+            onGenerate={generateQuiz}
+            onCancel={() => {
+              setShowCreateForm(false);
+              setNewQuizTopic('');
+              setNewQuizDifficulty('medium');
+            }}
+            settings={quizSettings}
+            onSettingsChange={setQuizSettings}
+          />
         )}
 
         <div className="flex flex-col lg:flex-row gap-6 sm:gap-8">
@@ -782,99 +631,23 @@ export default function QuizPage() {
                 </button>
               </div>
             ) : (
-              <div className="space-y-4">
-                {availableQuizzes.map((quiz) => (
-                  <div key={quiz.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow duration-200">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-4 sm:space-y-0">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-1 truncate">
-                          {quiz.title}
-                        </h3>
-                        <p className="text-gray-600 mb-2">{quiz.topic}</p>
-                        <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-gray-500">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(quiz.difficulty)}`}>
-                            {quiz.difficulty}
-                          </span>
-                          <span className="flex items-center">
-                            <Clock className="w-4 h-4 mr-1" />
-                            {quiz.questions.length} questions
-                          </span>
-                          {!user && (
-                            <span className="flex items-center text-yellow-600">
-                              <Lock className="w-4 h-4 mr-1" />
-                              Limited analysis
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => startQuiz(quiz)}
-                        className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto"
-                      >
-                        <Play className="w-4 h-4" />
-                        <span>Start</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+        // update
+              <QuizList
+                quizzes={availableQuizzes}
+                onStart={startQuiz}
+                getDifficultyColor={getDifficultyColor}
+              />
             )}
           </div>
 
-          {/* Sidebar - Only show for logged-in users */}
-          {user && (
-            <div className={`lg:w-80 ${showSidebar ? 'block' : 'hidden lg:block'}`}>
-              {showSidebar && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden" onClick={() => setShowSidebar(false)}></div>
-              )}
-              <div className={`${showSidebar ? 'fixed right-0 top-0 h-full w-80 bg-white z-50 p-4 overflow-y-auto lg:relative lg:z-auto lg:p-0 lg:bg-transparent' : ''}`}>
-                {showSidebar && (
-                  <div className="flex justify-between items-center mb-4 lg:hidden">
-                    <h3 className="text-lg font-semibold">Recent Attempts</h3>
-                    <button onClick={() => setShowSidebar(false)}>
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-                )}
-                
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
-                  <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4 hidden lg:block">Recent Attempts</h2>
-                  {attempts.length === 0 ? (
-                    <div className="text-center py-6 sm:py-8">
-                      <Target className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 mx-auto mb-2" />
-                      <p className="text-gray-600 text-sm">No attempts yet</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {attempts.map((attempt) => (
-                        <div key={attempt.id} className="bg-gray-50 rounded-lg p-3 sm:p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <h4 className="font-medium text-gray-900 text-sm truncate flex-1 mr-2">
-                              {attempt.quiz.title}
-                            </h4>
-                            <div className={`flex items-center ${
-                              attempt.score >= 80 ? 'text-green-600' : 
-                              attempt.score >= 60 ? 'text-yellow-600' : 'text-red-600'
-                            }`}>
-                              {attempt.score >= 80 ? (
-                                <CheckCircle className="w-4 h-4 mr-1" />
-                              ) : (
-                                <XCircle className="w-4 h-4 mr-1" />
-                              )}
-                              <span className="text-sm font-medium">{attempt.score}%</span>
-                            </div>
-                          </div>
-                          <p className="text-xs text-gray-500">
-                            {new Date(attempt.completed_at).toLocaleDateString()}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Sidebar */}
+        {user &&
+          <RecentAttemptsSidebar
+            attempts={attempts}
+            showSidebar={showSidebar}
+            onClose={() => setShowSidebar(false)}
+          />
+                  }
         </div>
       </div>
     </div>
