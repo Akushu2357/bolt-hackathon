@@ -255,6 +255,24 @@ export default function QuizResultsPage() {
     return QuizScoringService.isQuestionCorrect(question, userAnswer, state.gradingResults);
   };
 
+  const getAnswerGrade = (questionIndex: number): 'correct' | 'partial' | 'incorrect' => {
+    if (!state) return 'incorrect';
+    
+    const question = state.quiz.questions[questionIndex];
+    const userAnswer = state.selectedAnswers[questionIndex];
+    
+    // For open-ended questions, check grading results
+    if (question.type === 'open_ended' && state.gradingResults) {
+      const gradingResult = state.gradingResults.find(r => r.question === question.question);
+      if (gradingResult) {
+        return gradingResult.grade;
+      }
+    }
+    
+    // For other question types, use the existing logic
+    return QuizScoringService.isQuestionCorrect(question, userAnswer, state.gradingResults) ? 'correct' : 'incorrect';
+  };
+
   const retakeQuiz = () => {
     navigate('/quiz', { 
       state: { 
@@ -282,7 +300,11 @@ export default function QuizResultsPage() {
   }
 
   const { quiz, selectedAnswers, gradingResults, score: originalScore } = state;
-  const correctCount = quiz.questions.filter((_, index) => isAnswerCorrect(index)).length;
+  
+  // Calculate counts for different answer types
+  const correctCount = quiz.questions.filter((_, index) => getAnswerGrade(index) === 'correct').length;
+  const partialCount = quiz.questions.filter((_, index) => getAnswerGrade(index) === 'partial').length;
+  const incorrectCount = quiz.questions.filter((_, index) => getAnswerGrade(index) === 'incorrect').length;
   
   // Use the original score from the quiz attempt (which includes AI grading) instead of recalculating
   const actualScore = originalScore || Math.round((correctCount / quiz.questions.length) * 100);
@@ -389,6 +411,7 @@ export default function QuizResultsPage() {
               showAnswers={showAnswers}
               setShowAnswers={setShowAnswers}
               retakeQuiz={retakeQuiz}
+              partialCount={partialCount}
             />
             <PerformanceAnalysis
               loadingAnalysis={loadingAnalysis}
