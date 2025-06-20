@@ -524,20 +524,12 @@ export default function HomePage() {
                     onChange={(e) => setNewScheduleItem({...newScheduleItem, subject: e.target.value})}
                     className="input-field"
                   />
-                  <select
-                    value={newScheduleItem.day}
-                    onChange={(e) => setNewScheduleItem({...newScheduleItem, day: e.target.value})}
+                  <input
+                    type="date"
+                    value={newScheduleItem.date}
+                    onChange={(e) => setNewScheduleItem({...newScheduleItem, date: e.target.value})}
                     className="input-field"
-                  >
-                    <option value="">Select day</option>
-                    <option value="Monday">Monday</option>
-                    <option value="Tuesday">Tuesday</option>
-                    <option value="Wednesday">Wednesday</option>
-                    <option value="Thursday">Thursday</option>
-                    <option value="Friday">Friday</option>
-                    <option value="Saturday">Saturday</option>
-                    <option value="Sunday">Sunday</option>
-                  </select>
+                  />
                   <input
                     type="time"
                     value={newScheduleItem.time}
