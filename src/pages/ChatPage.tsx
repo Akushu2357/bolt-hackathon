@@ -3,6 +3,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Send, Bot, User, Plus, MessageCircle, Trash2, Menu, X, LogIn } from 'lucide-react';
+import GuestLimitModal from '../components/common/GuestLimitModal';
+import { GuestLimitService } from '../services/guestLimitService';
 
 interface Message {
   id: string;
@@ -28,11 +30,9 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false);
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [showSidebar, setShowSidebar] = useState(false);
-  const [guestChatCount, setGuestChatCount] = useState(0);
   const [guestMessages, setGuestMessages] = useState<Message[]>([]);
+  const [showLimitModal, setShowLimitModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const MAX_GUEST_CHATS = 5;
 
   useEffect(() => {
     // Check for initial message from URL params (for logged-out users)
@@ -49,12 +49,8 @@ export default function ChatPage() {
       fetchSessions();
     } else {
       // For guest users, load from localStorage
-      const savedGuestCount = localStorage.getItem('guestChatCount');
       const savedGuestMessages = localStorage.getItem('guestMessages');
       
-      if (savedGuestCount) {
-        setGuestChatCount(parseInt(savedGuestCount));
-      }
       if (savedGuestMessages) {
         setGuestMessages(JSON.parse(savedGuestMessages));
       }
@@ -166,6 +162,12 @@ export default function ChatPage() {
   const sendMessage = async () => {
     if (!inputMessage.trim() || loading) return;
 
+    // Check guest limits
+    if (!user && !GuestLimitService.canPerformAction('chat')) {
+      setShowLimitModal(true);
+      return;
+    }
+
     const userMessage = inputMessage.trim();
     setInputMessage('');
     setLoading(true);
@@ -223,10 +225,6 @@ export default function ChatPage() {
         }
       } else {
         // Guest user flow
-        if (guestChatCount >= MAX_GUEST_CHATS) {
-          return; // Don't allow more chats
-        }
-
         const userMsg: Message = {
           id: Date.now().toString(),
           role: 'user',
@@ -249,11 +247,10 @@ export default function ChatPage() {
         const finalMessages = [...newGuestMessages, aiMsg];
         setGuestMessages(finalMessages);
 
-        const newCount = guestChatCount + 1;
-        setGuestChatCount(newCount);
+        // Increment guest usage
+        GuestLimitService.incrementUsage('chat');
 
         // Save to localStorage
-        localStorage.setItem('guestChatCount', newCount.toString());
         localStorage.setItem('guestMessages', JSON.stringify(finalMessages));
       }
     } catch (error) {
@@ -285,7 +282,8 @@ export default function ChatPage() {
   };
 
   const displayMessages = user ? messages : guestMessages;
-  const canSendMessage = user || guestChatCount < MAX_GUEST_CHATS;
+  const canSendMessage = user || GuestLimitService.canPerformAction('chat');
+  const guestUsage = GuestLimitService.getUsageSummary();
 
   if (loadingSessions) {
     return (
@@ -401,7 +399,7 @@ export default function ChatPage() {
                 {!user && (
                   <div className="flex items-center space-x-2">
                     <span className="text-sm text-gray-600">
-                      {guestChatCount}/{MAX_GUEST_CHATS} free chats used
+                      {guestUsage.chats.remaining}/{guestUsage.chats.total} free chats left
                     </span>
                     <button
                       onClick={() => navigate('/auth')}
@@ -426,7 +424,7 @@ export default function ChatPage() {
                   <p className="text-gray-600">
                     {user 
                       ? 'Ask me anything! I\'m here to help you learn.'
-                      : `You have ${MAX_GUEST_CHATS - guestChatCount} free chat${MAX_GUEST_CHATS - guestChatCount !== 1 ? 's' : ''} remaining. Login for unlimited access!`
+                      : `You have ${guestUsage.chats.remaining} free chat${guestUsage.chats.remaining !== 1 ? 's' : ''} remaining. Login for unlimited access!`
                     }
                   </p>
                 </div>
@@ -487,7 +485,7 @@ export default function ChatPage() {
               {!canSendMessage ? (
                 <div className="text-center py-4">
                   <p className="text-gray-600 mb-4">
-                    You've used all {MAX_GUEST_CHATS} free chats. Login to continue chatting!
+                    You've used all {guestUsage.chats.total} free chats. Login to continue chatting!
                   </p>
                   <button
                     onClick={() => navigate('/auth')}
@@ -521,6 +519,13 @@ export default function ChatPage() {
           </div>
         </div>
       </div>
+
+      {/* Guest Limit Modal */}
+      <GuestLimitModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        limitType="chat"
+      />
     </div>
   );
 }
