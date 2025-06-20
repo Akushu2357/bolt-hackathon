@@ -27,8 +27,8 @@ export class LearningProgressService {
     score: number,
     gradingResults?: GradedQuestion[]
   ): Promise<void> {
-    const weakAreas: string[] = [];
-    const strengths: string[] = [];
+    const currentWeakAreas: string[] = [];
+    const currentStrengths: string[] = [];
 
     for (let index = 0; index < quiz.questions.length; index++) {
       const question = quiz.questions[index];
@@ -37,9 +37,17 @@ export class LearningProgressService {
       let isCorrect = false;
       let gradingResult: GradedQuestion | undefined;
       
-      // Find grading result for open-ended questions
+      // Find grading result for open-ended questions by position
       if (question.type === 'open_ended' && gradingResults) {
-        gradingResult = gradingResults.find(r => r.question === question.question);
+        const openEndedQuestions = quiz.questions
+          .map((q, idx) => ({ question: q, index: idx }))
+          .filter(item => item.question.type === 'open_ended');
+        
+        const currentQuestionOpenEndedIndex = openEndedQuestions.findIndex(item => item.index === index);
+        
+        if (currentQuestionOpenEndedIndex >= 0 && currentQuestionOpenEndedIndex < gradingResults.length) {
+          gradingResult = gradingResults[currentQuestionOpenEndedIndex];
+        }
       }
       
       switch (question.type) {
@@ -86,14 +94,14 @@ export class LearningProgressService {
       // Create area description with full question text
       const areaString = question.question; // Use full question text instead of truncating
       
-      if (isCorrect) {
-        strengths.push(areaString);
+      if (isCorrect || (gradingResult && gradingResult.grade === 'partial')) {
+        currentStrengths.push(areaString);
       } else {
-        weakAreas.push(areaString);
+        currentWeakAreas.push(areaString);
         
         // Add specific weak areas from grading results for open-ended questions
         if (gradingResult && gradingResult.weakAreas && gradingResult.weakAreas.length > 0) {
-          weakAreas.push(...gradingResult.weakAreas);
+          currentWeakAreas.push(...gradingResult.weakAreas);
         }
       }
     }
@@ -101,12 +109,12 @@ export class LearningProgressService {
     // Add general weak areas from grading results
     if (gradingResults && gradingResults.length > 0) {
       const additionalWeakAreas = GradingService.extractWeakAreasFromGrading(gradingResults);
-      weakAreas.push(...additionalWeakAreas);
+      currentWeakAreas.push(...additionalWeakAreas);
     }
 
-    // Remove duplicates
-    const uniqueWeakAreas = [...new Set(weakAreas)];
-    const uniqueStrengths = [...new Set(strengths)];
+    // Remove duplicates from current session
+    const uniqueCurrentWeakAreas = [...new Set(currentWeakAreas)];
+    const uniqueCurrentStrengths = [...new Set(currentStrengths)];
 
     try {
       const { data: existingProgress } = await supabase
@@ -117,9 +125,24 @@ export class LearningProgressService {
         .maybeSingle();
 
       if (existingProgress) {
-        // Merge with existing weak areas and strengths
-        const mergedWeakAreas = [...new Set([uniqueWeakAreas])];
-        const mergedStrengths = [...new Set([uniqueStrengths])];
+        // Preserve historical data and add new results
+        // For weak areas: keep existing ones and add new ones (but remove items that are now strengths)
+        const existingWeakAreas = existingProgress.weak_areas || [];
+        const existingStrengths = existingProgress.strengths || [];
+        
+        // Remove current strengths from existing weak areas (showing improvement)
+        const filteredExistingWeakAreas = existingWeakAreas.filter(
+          area => !uniqueCurrentStrengths.includes(area)
+        );
+        
+        // Remove current weak areas from existing strengths (showing regression)
+        const filteredExistingStrengths = existingStrengths.filter(
+          area => !uniqueCurrentWeakAreas.includes(area)
+        );
+        
+        // Merge with current results
+        const mergedWeakAreas = [...new Set([...filteredExistingWeakAreas, ...uniqueCurrentWeakAreas])];
+        const mergedStrengths = [...new Set([...filteredExistingStrengths, ...uniqueCurrentStrengths])];
         
         // Update existing progress
         await supabase
@@ -138,8 +161,8 @@ export class LearningProgressService {
           .insert({
             user_id: userId,
             topic: quiz.topic,
-            weak_areas: uniqueWeakAreas,
-            strengths: uniqueStrengths,
+            weak_areas: uniqueCurrentWeakAreas,
+            strengths: uniqueCurrentStrengths,
             progress_score: score
           });
       }
