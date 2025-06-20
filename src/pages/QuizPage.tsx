@@ -22,10 +22,12 @@ import QuizQuestion from '../components/QuizPage/QuizQuestion';
 import QuizList from '../components/QuizPage/QuizList';
 import CreateQuizForm from '../components/QuizPage/CreateQuizForm';
 import RecentAttemptsSidebar from '../components/QuizPage/RecentAttemptsSidebar';
+import GuestLimitModal from '../components/common/GuestLimitModal';
 import { QuizService, QuizSettings } from '../services/quizService';
 import { QuizDataService } from '../services/quizDataService';
 import { QuizScoringService } from '../services/quizScoringService';
 import { LearningProgressService } from '../services/learningProgressService';
+import { GuestLimitService } from '../services/guestLimitService';
 
 interface Question {
   id: string;
@@ -56,6 +58,37 @@ interface QuizAttempt {
   };
 }
 
+// Mock quiz generation for guest users
+const generateMockQuestions = (topic: string, difficulty: string): Question[] => {
+  const mockQuestions: Question[] = [
+    {
+      id: 'mock-1',
+      type: 'single',
+      question: `What is a fundamental concept in ${topic}?`,
+      options: ['Option A', 'Option B', 'Option C', 'Option D'],
+      explanation: 'This is a sample explanation for the correct answer.',
+      correct_answer: [0]
+    },
+    {
+      id: 'mock-2',
+      type: 'true_false',
+      question: `${topic} is an important subject to study.`,
+      explanation: 'This statement is generally true for most academic subjects.',
+      correct_answer: true
+    },
+    {
+      id: 'mock-3',
+      type: 'multiple',
+      question: `Which of the following are related to ${topic}? (Select all that apply)`,
+      options: ['Related concept A', 'Unrelated concept', 'Related concept B', 'Another unrelated concept'],
+      explanation: 'Multiple concepts can be related to a single topic.',
+      correct_answer: [0, 2]
+    }
+  ];
+  
+  return mockQuestions.slice(0, Math.min(3, mockQuestions.length));
+};
+
 export default function QuizPage() {
   const { user } = useAuth();
   const location = useLocation();
@@ -71,7 +104,8 @@ export default function QuizPage() {
   const [newQuizDifficulty, setNewQuizDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [showSidebar, setShowSidebar] = useState(false);
   const [guestQuizzes, setGuestQuizzes] = useState<Quiz[]>([]);
-  const [showAnswersBlocked, setShowAnswersBlocked] = useState(false);
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const [limitModalType, setLimitModalType] = useState<'quiz' | 'quizAttempt'>('quiz');
   const [quizSettings, setQuizSettings] = useState<QuizSettings>({
     numberOfQuestions: 5,
     numberOfChoices: 4,
@@ -93,7 +127,6 @@ export default function QuizPage() {
   }, [user]);
 
   const loadGuestQuizzes = () => {
-    // updata use api
     // Create some sample quizzes for guest users
     const sampleQuizzes: Quiz[] = [
       {
@@ -146,33 +179,56 @@ export default function QuizPage() {
   };
 
   const generateQuiz = async () => {
-    if (!newQuizTopic.trim() || !user) return;
+    if (!newQuizTopic.trim()) return;
+
+    // Check guest limits for quiz generation
+    if (!user && !GuestLimitService.canPerformAction('quiz')) {
+      setLimitModalType('quiz');
+      setShowLimitModal(true);
+      return;
+    }
 
     setLoading(true);
     try {
-      // Get user's weak areas for this topic to focus on
-      const weakAreas = await QuizService.getUserWeakAreas(user.id, newQuizTopic);
-      
       if (user) {
-      // Generate questions using the quiz service
-      const response = await QuizService.generateQuestions({
-        topic: newQuizTopic,
-        difficulty: newQuizDifficulty,
-        contexts: weakAreas.slice(0, 3), // Use top 3 weak areas as context
-        settings: quizSettings
-      });
+        // Get user's weak areas for this topic to focus on
+        const weakAreas = await QuizService.getUserWeakAreas(user.id, newQuizTopic);
+        
+        // Generate questions using the quiz service
+        const response = await QuizService.generateQuestions({
+          topic: newQuizTopic,
+          difficulty: newQuizDifficulty,
+          contexts: weakAreas.slice(0, 3), // Use top 3 weak areas as context
+          settings: quizSettings
+        });
 
-      // Save the quiz to database
-      const savedQuiz = await QuizDataService.saveQuiz(
-        user.id,
-        `${newQuizTopic} Quiz`,
-        newQuizTopic,
-        newQuizDifficulty,
-        response.questions
-      );
+        // Save the quiz to database
+        const savedQuiz = await QuizDataService.saveQuiz(
+          user.id,
+          `${newQuizTopic} Quiz`,
+          newQuizTopic,
+          newQuizDifficulty,
+          response.questions
+        );
+
+        setQuizzes([savedQuiz, ...quizzes]);
+      } else {
+        // For guest users, create a mock quiz
+        const mockQuiz: Quiz = {
+          id: `guest-${Date.now()}`,
+          title: `${newQuizTopic} Quiz`,
+          topic: newQuizTopic,
+          difficulty: newQuizDifficulty,
+          questions: generateMockQuestions(newQuizTopic, newQuizDifficulty),
+          created_at: new Date().toISOString()
+        };
+
+        setGuestQuizzes([mockQuiz, ...guestQuizzes]);
+        
+        // Increment guest usage
+        GuestLimitService.incrementUsage('quiz');
       }
 
-      setQuizzes([savedQuiz, ...quizzes]);
       setShowCreateForm(false);
       setNewQuizTopic('');
     } catch (error) {
@@ -184,6 +240,13 @@ export default function QuizPage() {
   };
 
   const startQuiz = (quiz: Quiz) => {
+    // Check guest limits for quiz attempts
+    if (!user && !GuestLimitService.canPerformAction('quizAttempt')) {
+      setLimitModalType('quizAttempt');
+      setShowLimitModal(true);
+      return;
+    }
+
     setCurrentQuiz(quiz);
     setCurrentQuestionIndex(0);
     // Initialize answers based on question type
@@ -192,7 +255,6 @@ export default function QuizPage() {
         case 'open_ended':
           return '';
         case 'true_false':
-          // update
           return false;
         default:
           return [];
@@ -243,28 +305,35 @@ export default function QuizPage() {
   };
 
   const finishQuiz = async () => {
-    if (!currentQuiz || !user) return;
+    if (!currentQuiz) return;
 
     try {
       // Calculate score using the scoring service
       const scoringResult = await QuizScoringService.calculateScore(currentQuiz, selectedAnswers);
       
-      // Save quiz attempt
-      await QuizDataService.saveQuizAttempt(
-        currentQuiz.id,
-        user.id,
-        selectedAnswers,
-        scoringResult.score
-      );
+      if (user) {
+        // Save quiz attempt for authenticated users
+        await QuizDataService.saveQuizAttempt(
+          currentQuiz.id,
+          user.id,
+          selectedAnswers,
+          scoringResult.score
+        );
 
-      // Update learning progress
-      await LearningProgressService.updateLearningProgress(
-        user.id,
-        currentQuiz,
-        selectedAnswers,
-        scoringResult.score,
-        scoringResult.gradingResults
-      );
+        // Update learning progress
+        await LearningProgressService.updateLearningProgress(
+          user.id,
+          currentQuiz,
+          selectedAnswers,
+          scoringResult.score,
+          scoringResult.gradingResults
+        );
+        
+        fetchAttempts();
+      } else {
+        // For guest users, just increment the attempt counter
+        GuestLimitService.incrementUsage('quizAttempt');
+      }
       
       // Navigate to results page with quiz data
       navigate('/quiz-results', {
@@ -276,8 +345,6 @@ export default function QuizPage() {
         }
       });
       
-      fetchAttempts();
-      setShowResults(true);
     } catch (error) {
       console.error('Error finishing quiz:', error);
     }
@@ -287,8 +354,6 @@ export default function QuizPage() {
     setCurrentQuiz(null);
     setCurrentQuestionIndex(0);
     setSelectedAnswers([]);
-    setShowResults(false);
-    setShowAnswersBlocked(false);
   };
 
   const getDifficultyColor = (difficulty: string) => {
@@ -432,10 +497,9 @@ export default function QuizPage() {
     }
   };
 
-  // update
   const availableQuizzes = user ? quizzes : guestQuizzes;
 
-  if (currentQuiz && !showResults) {
+  if (currentQuiz) {
     const currentQuestion = currentQuiz.questions[currentQuestionIndex];
     const progress = ((currentQuestionIndex + 1) / currentQuiz.questions.length) * 100;
 
@@ -482,79 +546,6 @@ export default function QuizPage() {
     );
   }
 
-  {/* <<<<<<< main
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-8 text-center">
-            <div className="mb-6 sm:mb-8">
-              <Trophy className={`w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 ${
-                score >= 80 ? 'text-yellow-500' : score >= 60 ? 'text-gray-400' : 'text-red-500'
-              }`} />
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Quiz Complete!</h1>
-              <p className="text-lg sm:text-xl text-gray-600">
-                You scored {score}% ({correctAnswers}/{currentQuiz.questions.length})
-              </p>
-            </div>
-
-            {showAnswersBlocked && (
-              <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <div className="flex items-center justify-center mb-2">
-                  <Lock className="w-5 h-5 text-yellow-600 mr-2" />
-                  <h3 className="text-lg font-semibold text-yellow-800">Detailed Analysis Locked</h3>
-                </div>
-                <p className="text-yellow-700 mb-4">
-                  Login to view detailed quiz analysis, track your progress, and access unlimited quizzes!
-                </p>
-                <button
-                  onClick={() => navigate('/auth')}
-                  className="btn-primary flex items-center justify-center space-x-2 mx-auto"
-                >
-                  <LogIn className="w-4 h-4" />
-                  <span>Login for Full Access</span>
-                </button>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
-              <div className="text-center p-4 bg-green-50 rounded-lg">
-                <div className="text-xl sm:text-2xl font-bold text-green-600">{correctAnswers}</div>
-                <div className="text-sm text-gray-600">Correct</div>
-              </div>
-              <div className="text-center p-4 bg-red-50 rounded-lg">
-                <div className="text-xl sm:text-2xl font-bold text-red-600">
-                  {currentQuiz.questions.length - correctAnswers}
-                </div>
-                <div className="text-sm text-gray-600">Incorrect</div>
-              </div>
-              <div className="text-center p-4 bg-primary-50 rounded-lg">
-                <div className="text-xl sm:text-2xl font-bold text-primary-600">{score}%</div>
-                <div className="text-sm text-gray-600">Score</div>
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4">
-              <button
-                onClick={resetQuiz}
-                className="btn-primary"
-              >
-                Back to Quizzes
-              </button>
-              <button
-                onClick={() => startQuiz(currentQuiz)}
-                className="btn-secondary flex items-center justify-center space-x-2"
-              >
-                <RotateCcw className="w-4 h-4" />
-                <span>Retake Quiz</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-=======*/}
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
@@ -631,7 +622,6 @@ export default function QuizPage() {
                 </button>
               </div>
             ) : (
-        // update
               <QuizList
                 quizzes={availableQuizzes}
                 onStart={startQuiz}
@@ -640,16 +630,23 @@ export default function QuizPage() {
             )}
           </div>
 
-          {/* Sidebar */}
-        {user &&
-          <RecentAttemptsSidebar
-            attempts={attempts}
-            showSidebar={showSidebar}
-            onClose={() => setShowSidebar(false)}
-          />
-                  }
+          {/* Sidebar - Only show for authenticated users */}
+          {user && (
+            <RecentAttemptsSidebar
+              attempts={attempts}
+              showSidebar={showSidebar}
+              onClose={() => setShowSidebar(false)}
+            />
+          )}
         </div>
       </div>
+
+      {/* Guest Limit Modal */}
+      <GuestLimitModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        limitType={limitModalType}
+      />
     </div>
   );
 }

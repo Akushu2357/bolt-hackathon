@@ -39,43 +39,67 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// New component for routes that work for both guest and authenticated users
+function GuestOrAuthRoute({ children }: { children: React.ReactNode }) {
+  const { loading } = useAuth();
+  
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+  
+  return <>{children}</>;
+}
+
 function AppRoutes() {
   return (
     <Routes>
+      {/* Auth page - only for non-authenticated users */}
       <Route path="/auth" element={
         <PublicRoute>
           <AuthPage />
         </PublicRoute>
       } />
+      
+      {/* Default route redirects to home */}
       <Route path="/" element={<Navigate to="/home" replace />} />
+      
+      {/* Home page - accessible to both guest and authenticated users */}
       <Route path="/home" element={
-        <ProtectedRoute>
+        <GuestOrAuthRoute>
           <Layout>
             <HomePage />
           </Layout>
-        </ProtectedRoute>
+        </GuestOrAuthRoute>
       } />
+      
+      {/* Chat page - accessible to both guest and authenticated users */}
       <Route path="/chat" element={
-        <ProtectedRoute>
+        <GuestOrAuthRoute>
           <Layout>
             <ChatPage />
           </Layout>
-        </ProtectedRoute>
+        </GuestOrAuthRoute>
       } />
+      
+      {/* Quiz page - accessible to both guest and authenticated users */}
       <Route path="/quiz" element={
-        <ProtectedRoute>
+        <GuestOrAuthRoute>
           <Layout>
             <QuizPage />
           </Layout>
-        </ProtectedRoute>
+        </GuestOrAuthRoute>
       } />
+      
+      {/* Quiz results - accessible to both guest and authenticated users */}
       <Route path="/quiz-results" element={
-        <ProtectedRoute>
+        <GuestOrAuthRoute>
           <Layout>
             <QuizResultsPage />
           </Layout>
-        </ProtectedRoute>
+        </GuestOrAuthRoute>
       } />
+      
+      {/* Profile page - only for authenticated users */}
       <Route path="/profile" element={
         <ProtectedRoute>
           <Layout>
