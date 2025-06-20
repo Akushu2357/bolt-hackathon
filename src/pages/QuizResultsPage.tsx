@@ -317,7 +317,7 @@ export default function QuizResultsPage() {
                   <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center mr-3">
                     <Brain className="w-5 h-5 text-white" />
                   </div>
-                  <h2 className="text-xl font-semibold text-gray-900">AI Grading Summary</h2>
+                  <h2 className="text-xl font-semibold text-gray-900">AI Grading Summary for Open-Ended Questions</h2>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
