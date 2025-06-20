@@ -59,18 +59,19 @@ export class QuizScoringService {
           break;
           
         case 'open_ended':
-          // Collect for batch grading
+          // Collect for batch grading - include question index for proper matching
           openEndedQuestions.push({
             question: question.question,
             answer: userAnswer as string,
-            context: `Expected answer: ${correctAnswer as string}`
+            context: `Expected answer: ${correctAnswer as string}`,
+            questionIndex: index // Add this to track original position
           });
           openEndedIndices.push(index);
           break;
           
         case 'single':
         default:
-          // Single choice: compare the selected index with correct answer
+          // Single choice: handle different correct_answer formats
           let isCorrect = false;
           
           if (Array.isArray(correctAnswer)) {
@@ -136,12 +137,9 @@ export class QuizScoringService {
         return userAnswer === correctAnswer;
         
       case 'open_ended':
-        // Check grading results if available
-        if (gradingResults) {
-          const result = gradingResults.find(r => r.question === question.question);
-          return result ? result.grade === 'correct' : false;
-        }
-        return false; // Default to false if no grading results
+        // For open-ended questions, we need to find the grading result by position
+        // This is handled in the component level now
+        return false; // Default to false, actual grading is handled elsewhere
         
       case 'single':
       default:
@@ -174,16 +172,8 @@ export class QuizScoringService {
     let weakAreas: string[] = [];
     let score: number | undefined;
     
-    // Add specific feedback for open-ended questions
-    if (question.type === 'open_ended' && gradingResults) {
-      const result = gradingResults.find(r => r.question === question.question);
-      if (result) {
-        feedback = result.feedback;
-        improvements = result.improvements || [];
-        weakAreas = result.weakAreas || [];
-        score = result.score;
-      }
-    }
+    // Note: For open-ended questions, specific feedback is now handled at the component level
+    // using position-based matching rather than question text matching
     
     return {
       isCorrect,

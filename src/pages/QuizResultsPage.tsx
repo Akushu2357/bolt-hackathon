@@ -169,16 +169,15 @@ export default function QuizResultsPage() {
     try {
       const { quiz, selectedAnswers, gradingResults } = state;
       
-      // Calculate correct count using the scoring service
-      const correctCount = quiz.questions.filter((q, index) => {
-        return QuizScoringService.isQuestionCorrect(q, selectedAnswers[index], gradingResults);
-      }).length;
+      // Calculate correct count using the new grading logic
+      const correctCount = quiz.questions.filter((_, index) => getAnswerGrade(index) === 'correct').length;
+      const partialCount = quiz.questions.filter((_, index) => getAnswerGrade(index) === 'partial').length;
 
-      // Recalculate the actual score based on correct answers
-      const actualScore = Math.round((correctCount / quiz.questions.length) * 100);
+      // Recalculate the actual score based on correct answers and partial credit
+      const actualScore = Math.round(((correctCount + (partialCount * 0.5)) / quiz.questions.length) * 100);
 
-      const incorrectQuestions = quiz.questions.filter((q, index) => {
-        return !QuizScoringService.isQuestionCorrect(q, selectedAnswers[index], gradingResults);
+      const incorrectQuestions = quiz.questions.filter((_, index) => {
+        return getAnswerGrade(index) === 'incorrect';
       });
 
       // Generate personalized analysis using the actual score
@@ -189,20 +188,34 @@ export default function QuizResultsPage() {
         if (incorrectQuestions.length > 0) {
           analysis += `Focus on reviewing the ${incorrectQuestions.length} question(s) you missed to achieve perfect understanding. `;
         }
+        if (partialCount > 0) {
+          analysis += `You received partial credit on ${partialCount} question(s), showing good understanding that can be refined. `;
+        }
         analysis += `Consider challenging yourself with harder difficulty levels or exploring advanced topics in ${quiz.topic}.`;
       } else if (actualScore >= 80) {
-        analysis = `👏 Great job! Your ${actualScore}% score indicates solid understanding of ${quiz.topic}. You're on the right track with ${correctCount} correct answers out of ${quiz.questions.length}. `;
+        analysis = `👏 Great job! Your ${actualScore}% score indicates solid understanding of ${quiz.topic}. You're on the right track with ${correctCount} fully correct answers out of ${quiz.questions.length}. `;
+        if (partialCount > 0) {
+          analysis += `You also received partial credit on ${partialCount} question(s), which shows you're grasping the concepts but can improve your explanations. `;
+        }
         if (incorrectQuestions.length > 0) {
           analysis += `Review the ${incorrectQuestions.length} areas where you had difficulty - these represent opportunities for growth. `;
         }
         analysis += `With a bit more practice, you'll master this topic completely.`;
       } else if (actualScore >= 60) {
-        analysis = `📚 Good effort! You scored ${actualScore}%, showing you understand the basics of ${quiz.topic}. You got ${correctCount} questions right, which is a solid foundation. `;
+        analysis = `📚 Good effort! You scored ${actualScore}%, showing you understand the basics of ${quiz.topic}. You got ${correctCount} questions fully right`;
+        if (partialCount > 0) {
+          analysis += ` and ${partialCount} partially correct`;
+        }
+        analysis += `, which is a solid foundation. `;
         analysis += `Focus on the ${incorrectQuestions.length} questions you missed - understanding these concepts will significantly improve your knowledge. `;
         analysis += `Consider reviewing the explanations and taking additional practice quizzes to strengthen your understanding.`;
       } else {
         analysis = `💪 Don't worry - learning is a journey! Your ${actualScore}% score shows you're building foundational knowledge in ${quiz.topic}. `;
-        analysis += `You got ${correctCount} questions correct, which means you're already grasping some key concepts. `;
+        analysis += `You got ${correctCount} questions fully correct`;
+        if (partialCount > 0) {
+          analysis += ` and ${partialCount} partially correct`;
+        }
+        analysis += `, which means you're already grasping some key concepts. `;
         analysis += `Focus on understanding the explanations for the questions you missed. Consider reviewing the basic concepts and taking the quiz again to track your improvement.`;
       }
 
@@ -246,31 +259,33 @@ export default function QuizResultsPage() {
     }
   };
 
-  const isAnswerCorrect = (questionIndex: number): boolean => {
-    if (!state) return false;
-    
-    const question = state.quiz.questions[questionIndex];
-    const userAnswer = state.selectedAnswers[questionIndex];
-    
-    return QuizScoringService.isQuestionCorrect(question, userAnswer, state.gradingResults);
-  };
-
   const getAnswerGrade = (questionIndex: number): 'correct' | 'partial' | 'incorrect' => {
     if (!state) return 'incorrect';
     
     const question = state.quiz.questions[questionIndex];
     const userAnswer = state.selectedAnswers[questionIndex];
     
-    // For open-ended questions, check grading results
+    // For open-ended questions, check grading results by position
     if (question.type === 'open_ended' && state.gradingResults) {
-      const gradingResult = state.gradingResults.find(r => r.question === question.question);
-      if (gradingResult) {
+      // Find the position of this open-ended question among all open-ended questions
+      const openEndedQuestions = state.quiz.questions
+        .map((q, index) => ({ question: q, index }))
+        .filter(item => item.question.type === 'open_ended');
+      
+      const currentQuestionOpenEndedIndex = openEndedQuestions.findIndex(item => item.index === questionIndex);
+      
+      if (currentQuestionOpenEndedIndex >= 0 && currentQuestionOpenEndedIndex < state.gradingResults.length) {
+        const gradingResult = state.gradingResults[currentQuestionOpenEndedIndex];
         return gradingResult.grade;
       }
     }
     
     // For other question types, use the existing logic
     return QuizScoringService.isQuestionCorrect(question, userAnswer, state.gradingResults) ? 'correct' : 'incorrect';
+  };
+
+  const isAnswerCorrect = (questionIndex: number): boolean => {
+    return getAnswerGrade(questionIndex) === 'correct';
   };
 
   const retakeQuiz = () => {

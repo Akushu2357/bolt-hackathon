@@ -30,8 +30,22 @@ export default function DetailedReview({
   gradingResults 
 }: DetailedReviewProps) {
   
-  const getGradingResult = (question: string): GradedQuestion | undefined => {
-    return gradingResults?.find(result => result.id === question.id);
+  const getGradingResult = (questionIndex: number): GradedQuestion | undefined => {
+    if (!gradingResults) return undefined;
+    
+    // For open-ended questions, we need to match by position in the grading results array
+    // since grading results are returned in the same order as the questions were sent
+    const openEndedQuestions = quizQuestions
+      .map((q, index) => ({ question: q, index }))
+      .filter(item => item.question.type === 'open_ended');
+    
+    const currentQuestionOpenEndedIndex = openEndedQuestions.findIndex(item => item.index === questionIndex);
+    
+    if (currentQuestionOpenEndedIndex >= 0 && currentQuestionOpenEndedIndex < gradingResults.length) {
+      return gradingResults[currentQuestionOpenEndedIndex];
+    }
+    
+    return undefined;
   };
 
   const getGradeColor = (grade: string) => {
@@ -55,10 +69,10 @@ export default function DetailedReview({
           const userAnswer = selectedAnswers[index];
           const isExpanded = expandedQuestion === index;
           const feedback = QuizScoringService.getAnswerFeedback(question, userAnswer, gradingResults);
-          const gradingResult = getGradingResult(question);
+          const gradingResult = getGradingResult(index);
           
           return (
-            <div key={question.id} className="border border-gray-200 rounded-lg overflow-hidden">
+            <div key={`${question.id}-${index}`} className="border border-gray-200 rounded-lg overflow-hidden">
               <div 
                 className={`p-4 sm:p-6 cursor-pointer transition-colors duration-200 ${
                   isCorrect ? 'bg-green-50 hover:bg-green-100' : 'bg-red-50 hover:bg-red-100'
@@ -249,23 +263,22 @@ export default function DetailedReview({
                     </div>
                   )}
 
-                  {/* Show general explanation */}
-                  
-                      {!gradingResult && (
-                  <div className="bg-gradient-to-br from-blue-50 via-white to-indigo-50 border border-blue-200 rounded-lg p-4 relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-indigo-500/5 pointer-events-none"></div>
-                    <div className="relative flex items-start">
-                      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
-                        <Target className="w-4 h-4 text-white" />
-                      </div>
-                      <div>
-                        <h4 className="font-medium text-blue-900 mb-2">General Explanation:</h4>
-                        <p className="text-blue-800 text-sm leading-relaxed">
-                          {feedback.explanation}
-                        </p>
+                  {/* Show general explanation for non-open-ended questions */}
+                  {question.type !== 'open_ended' && (
+                    <div className="bg-gradient-to-br from-blue-50 via-white to-indigo-50 border border-blue-200 rounded-lg p-4 relative overflow-hidden">
+                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-indigo-500/5 pointer-events-none"></div>
+                      <div className="relative flex items-start">
+                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
+                          <Target className="w-4 h-4 text-white" />
+                        </div>
+                        <div>
+                          <h4 className="font-medium text-blue-900 mb-2">General Explanation:</h4>
+                          <p className="text-blue-800 text-sm leading-relaxed">
+                            {feedback.explanation}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
                   )}
                 </div>
               )}
