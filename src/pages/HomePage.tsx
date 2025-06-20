@@ -79,12 +79,18 @@ export default function HomePage() {
 
   const loadGuestData = () => {
     // Mock data for guest users
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
     const mockSchedule: StudyScheduleItem[] = [
       {
         id: 'guest-1',
         title: 'Try AI Chat',
         subject: 'Getting Started',
-        date: new Date().toISOString().split('T')[0],
+        date: today.toISOString().split('T')[0],
         time: '10:00',
         completed: false
       },
@@ -92,8 +98,24 @@ export default function HomePage() {
         id: 'guest-2',
         title: 'Take Sample Quiz',
         subject: 'Assessment',
-        date: new Date().toISOString().split('T')[0],
+        date: today.toISOString().split('T')[0],
         time: '14:00',
+        completed: false
+      },
+      {
+        id: 'guest-3',
+        title: 'Past Study Session',
+        subject: 'Mathematics',
+        date: yesterday.toISOString().split('T')[0],
+        time: '09:00',
+        completed: false
+      },
+      {
+        id: 'guest-4',
+        title: 'Future Learning',
+        subject: 'Science',
+        date: tomorrow.toISOString().split('T')[0],
+        time: '16:00',
         completed: false
       }
     ];
@@ -317,6 +339,15 @@ export default function HomePage() {
     setShowScheduleForm(false);
     setEditingScheduleId(null);
     setNewScheduleItem({ title: '', subject: '', date: '', time: '' });
+  };
+
+  // Helper function to check if a date is in the past
+  const isDateInPast = (dateString: string): boolean => {
+    const today = new Date();
+    const itemDate = new Date(dateString);
+    today.setHours(0, 0, 0, 0);
+    itemDate.setHours(0, 0, 0, 0);
+    return itemDate < today;
   };
 
   // Get guest usage summary for display
@@ -700,62 +731,83 @@ export default function HomePage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {studySchedule.map((item) => (
-                    <div
-                      key={item.id}
-                      className={`flex items-center justify-between p-4 rounded-lg border-2 transition-all duration-200 ${
-                        item.completed
-                          ? 'bg-green-50 border-green-200'
-                          : 'bg-white border-gray-200 hover:border-primary-200'
-                      }`}
-                    >
-                      <div className="flex items-center space-x-3">
-                        <button
-                          onClick={() => toggleScheduleItem(item.id)}
-                          className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors duration-200 ${
-                            item.completed
-                              ? 'bg-green-500 border-green-500'
-                              : 'border-gray-300 hover:border-primary-500'
-                          }`}
-                        >
-                          {item.completed && <CheckCircle className="w-4 h-4 text-white" />}
-                        </button>
-                        <div>
-                          <h4 className={`font-medium ${item.completed ? 'text-green-700 line-through' : 'text-gray-900'}`}>
-                            {item.title}
-                          </h4>
-                          <p className="text-sm text-gray-600">
-                            {item.subject} • {new Date(item.date).toLocaleDateString()} at {item.time}
-                          </p>
+                  {studySchedule.map((item) => {
+                    const isPastDate = isDateInPast(item.date);
+                    
+                    return (
+                      <div
+                        key={item.id}
+                        className={`flex items-center justify-between p-4 rounded-lg border-2 transition-all duration-200 ${
+                          item.completed
+                            ? 'bg-green-50 border-green-200'
+                            : isPastDate
+                            ? 'bg-red-50 border-red-200'
+                            : 'bg-white border-gray-200 hover:border-primary-200'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <button
+                            onClick={() => toggleScheduleItem(item.id)}
+                            className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors duration-200 ${
+                              item.completed
+                                ? 'bg-green-500 border-green-500'
+                                : isPastDate
+                                ? 'border-red-300 hover:border-red-500'
+                                : 'border-gray-300 hover:border-primary-500'
+                            }`}
+                          >
+                            {item.completed && <CheckCircle className="w-4 h-4 text-white" />}
+                          </button>
+                          <div>
+                            <h4 className={`font-medium ${
+                              item.completed 
+                                ? 'text-green-700 line-through' 
+                                : isPastDate
+                                ? 'text-red-700'
+                                : 'text-gray-900'
+                            }`}>
+                              {item.title}
+                            </h4>
+                            <p className={`text-sm ${
+                              isPastDate && !item.completed
+                                ? 'text-red-600'
+                                : 'text-gray-600'
+                            }`}>
+                              {item.subject} • {new Date(item.date).toLocaleDateString()} at {item.time}
+                              {isPastDate && !item.completed && (
+                                <span className="ml-2 text-red-500 font-medium">(Past Due)</span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          {item.completed && (
+                            <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                              Completed
+                            </span>
+                          )}
+                          {user && (
+                            <div className="flex space-x-1">
+                              <button
+                                onClick={() => startEditingScheduleItem(item)}
+                                className="p-1 text-gray-400 hover:text-primary-600 transition-colors"
+                                title="Edit"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => deleteScheduleItem(item.id)}
+                                className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                                title="Delete"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        {item.completed && (
-                          <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
-                            Completed
-                          </span>
-                        )}
-                        {user && (
-                          <div className="flex space-x-1">
-                            <button
-                              onClick={() => startEditingScheduleItem(item)}
-                              className="p-1 text-gray-400 hover:text-primary-600 transition-colors"
-                              title="Edit"
-                            >
-                              <Edit3 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => deleteScheduleItem(item.id)}
-                              className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
