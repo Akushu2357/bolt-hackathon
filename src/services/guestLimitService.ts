@@ -18,7 +18,7 @@ export class GuestLimitService {
   private static readonly STORAGE_KEY = 'tutorAI_guest_usage';
   private static readonly LIMITS: GuestLimits = {
     maxChats: 5,
-    maxQuizzes: 3,
+    maxQuizzes: 1, // Changed from 3 to 1
     maxQuizAttempts: 5
   };
 

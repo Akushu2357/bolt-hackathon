@@ -127,26 +127,26 @@ export default function QuizPage() {
   }, [user]);
 
   const loadGuestQuizzes = () => {
-    // Create some sample quizzes for guest users
-    const sampleQuizzes: Quiz[] = [
-      {
-        id: 'guest-1',
-        title: 'Basic Mathematics Quiz',
-        topic: 'Mathematics',
-        difficulty: 'easy',
-        questions: generateMockQuestions('Mathematics', 'easy'),
-        created_at: new Date().toISOString()
-      },
-      {
-        id: 'guest-2',
-        title: 'Science Fundamentals',
-        topic: 'Science',
-        difficulty: 'medium',
-        questions: generateMockQuestions('Science', 'medium'),
-        created_at: new Date().toISOString()
-      }
-    ];
-    setGuestQuizzes(sampleQuizzes);
+    // Check if guest has already generated a quiz
+    const guestUsage = GuestLimitService.getGuestUsage();
+    
+    if (guestUsage.quizzesGenerated > 0) {
+      // Create a sample quiz to show they've used their limit
+      const sampleQuizzes: Quiz[] = [
+        {
+          id: 'guest-used',
+          title: 'Sample Quiz (Already Used)',
+          topic: 'General Knowledge',
+          difficulty: 'medium',
+          questions: generateMockQuestions('General Knowledge', 'medium'),
+          created_at: new Date().toISOString()
+        }
+      ];
+      setGuestQuizzes(sampleQuizzes);
+    } else {
+      // Show empty state for new guests
+      setGuestQuizzes([]);
+    }
   };
   
   // Handle starting a quiz from navigation state
@@ -498,6 +498,8 @@ export default function QuizPage() {
   };
 
   const availableQuizzes = user ? quizzes : guestQuizzes;
+  const guestUsage = GuestLimitService.getUsageSummary();
+  const canGenerateQuiz = user || GuestLimitService.canPerformAction('quiz');
 
   if (currentQuiz) {
     const currentQuestion = currentQuiz.questions[currentQuestionIndex];
@@ -519,7 +521,6 @@ export default function QuizPage() {
             <div className="p-4 sm:p-6">
               <QuizQuestion
                 question={currentQuestion}
-                currentAnswer={selectedAnswers[currentQuestionIndex]}
                 renderInput={renderQuestionInput}
               />
               {/* Navigation */}
@@ -556,6 +557,11 @@ export default function QuizPage() {
             <p className="text-gray-600">
               {user ? 'Test your knowledge and track your progress' : 'Test your knowledge - Login for detailed analysis'}
             </p>
+            {!user && (
+              <div className="mt-2 text-sm text-gray-500">
+                Quiz generation: {guestUsage.quizzes.remaining}/{guestUsage.quizzes.total} remaining
+              </div>
+            )}
           </div>
           <div className="flex space-x-3">
             {!user && (
@@ -574,15 +580,35 @@ export default function QuizPage() {
               <Menu className="w-4 h-4" />
             </button>
             <button
-              onClick={() => setShowCreateForm(true)}
-              className="btn-primary flex items-center space-x-2"
+              onClick={() => canGenerateQuiz ? setShowCreateForm(true) : setShowLimitModal(true)}
+              className={`btn-primary flex items-center space-x-2 ${!canGenerateQuiz ? 'opacity-75' : ''}`}
             >
+              {!canGenerateQuiz && <Lock className="w-4 h-4" />}
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Generate Quiz</span>
               <span className="sm:hidden">New</span>
             </button>
           </div>
         </div>
+
+        {/* Guest limit warning */}
+        {!user && !canGenerateQuiz && (
+          <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+            <div className="flex items-center space-x-2 text-orange-700">
+              <Lock className="w-5 h-5" />
+              <span className="font-medium">Quiz Generation Limit Reached</span>
+            </div>
+            <p className="text-orange-600 text-sm mt-2">
+              You've used your free quiz generation. Login to create unlimited quizzes and access detailed analytics!
+            </p>
+            <button
+              onClick={() => navigate('/auth')}
+              className="mt-3 btn-primary text-sm"
+            >
+              Login for Unlimited Access
+            </button>
+          </div>
+        )}
 
         {/* Create Quiz Form */}
         {showCreateForm && (
@@ -610,16 +636,30 @@ export default function QuizPage() {
             {availableQuizzes.length === 0 ? (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 sm:p-12 text-center">
                 <BookOpen className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No quizzes yet</h3>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  {!user && !canGenerateQuiz ? 'Quiz Limit Reached' : 'No quizzes yet'}
+                </h3>
                 <p className="text-gray-600 mb-4">
-                  Generate your first quiz to start testing your knowledge
+                  {!user && !canGenerateQuiz 
+                    ? 'You\'ve used your free quiz generation. Login for unlimited access!'
+                    : 'Generate your first quiz to start testing your knowledge'
+                  }
                 </p>
-                <button
-                  onClick={() => setShowCreateForm(true)}
-                  className="btn-primary"
-                >
-                  Generate Quiz
-                </button>
+                {canGenerateQuiz ? (
+                  <button
+                    onClick={() => setShowCreateForm(true)}
+                    className="btn-primary"
+                  >
+                    Generate Quiz
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => navigate('/auth')}
+                    className="btn-primary"
+                  >
+                    Login for Unlimited Quizzes
+                  </button>
+                )}
               </div>
             ) : (
               <QuizList
