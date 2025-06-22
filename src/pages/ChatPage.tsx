@@ -300,16 +300,6 @@ export default function ChatPage() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
         <div className="flex h-[calc(100vh-8rem)] sm:h-[calc(100vh-12rem)] bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          {/* Mobile Header */}
-          <div className="lg:hidden absolute top-4 left-4 z-10">
-            <button
-              onClick={() => setShowSidebar(!showSidebar)}
-              className="p-2 bg-white rounded-lg shadow-md border border-gray-200"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-          </div>
-
           {/* Sidebar - Only show for logged-in users */}
           {user && (
             <div className={`${showSidebar ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 fixed lg:relative inset-y-0 left-0 z-50 w-80 bg-white border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out lg:transition-none`}>
