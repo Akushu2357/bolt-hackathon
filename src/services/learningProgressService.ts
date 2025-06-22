@@ -112,9 +112,9 @@ export class LearningProgressService {
       currentWeakAreas.push(...additionalWeakAreas);
     }
 
-    // Remove duplicates from current session
-    const uniqueCurrentWeakAreas = [...new Set(currentWeakAreas)];
-    const uniqueCurrentStrengths = [...new Set(currentStrengths)];
+    // Remove duplicates from current session and ensure all items are strings
+    const uniqueCurrentWeakAreas = [...new Set(currentWeakAreas.filter(area => typeof area === 'string' && area.trim() !== ''))];
+    const uniqueCurrentStrengths = [...new Set(currentStrengths.filter(area => typeof area === 'string' && area.trim() !== ''))];
 
     try {
       const { data: existingProgress } = await supabase
@@ -127,8 +127,8 @@ export class LearningProgressService {
       if (existingProgress) {
         // Preserve historical data and add new results
         // For weak areas: keep existing ones and add new ones (but remove items that are now strengths)
-        const existingWeakAreas = existingProgress.weak_areas || [];
-        const existingStrengths = existingProgress.strengths || [];
+        const existingWeakAreas = Array.isArray(existingProgress.weak_areas) ? existingProgress.weak_areas.filter(area => typeof area === 'string') : [];
+        const existingStrengths = Array.isArray(existingProgress.strengths) ? existingProgress.strengths.filter(area => typeof area === 'string') : [];
         
         // Remove current strengths from existing weak areas (showing improvement)
         const filteredExistingWeakAreas = existingWeakAreas.filter(
@@ -140,9 +140,9 @@ export class LearningProgressService {
           area => !uniqueCurrentWeakAreas.includes(area)
         );
         
-        // Merge with current results
-        const mergedWeakAreas = [...new Set([...filteredExistingWeakAreas, ...uniqueCurrentWeakAreas])];
-        const mergedStrengths = [...new Set([...filteredExistingStrengths, ...uniqueCurrentStrengths])];
+        // Merge with current results and ensure all are strings
+        const mergedWeakAreas = [...new Set([...filteredExistingWeakAreas, ...uniqueCurrentWeakAreas])].filter(area => typeof area === 'string' && area.trim() !== '');
+        const mergedStrengths = [...new Set([...filteredExistingStrengths, ...uniqueCurrentStrengths])].filter(area => typeof area === 'string' && area.trim() !== '');
         
         // Update existing progress
         await supabase
