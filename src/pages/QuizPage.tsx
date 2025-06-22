@@ -58,37 +58,6 @@ interface QuizAttempt {
   };
 }
 
-// Mock quiz generation for guest users as fallback
-const generateMockQuestions = (topic: string, difficulty: string): Question[] => {
-  const mockQuestions: Question[] = [
-    {
-      id: 'mock-1',
-      type: 'single',
-      question: `What is a fundamental concept in ${topic}?`,
-      options: ['Option A', 'Option B', 'Option C', 'Option D'],
-      explanation: 'This is a sample explanation for the correct answer.',
-      correct_answer: [0]
-    },
-    {
-      id: 'mock-2',
-      type: 'true_false',
-      question: `${topic} is an important subject to study.`,
-      explanation: 'This statement is generally true for most academic subjects.',
-      correct_answer: true
-    },
-    {
-      id: 'mock-3',
-      type: 'multiple',
-      question: `Which of the following are related to ${topic}? (Select all that apply)`,
-      options: ['Related concept A', 'Unrelated concept', 'Related concept B', 'Another unrelated concept'],
-      explanation: 'Multiple concepts can be related to a single topic.',
-      correct_answer: [0, 2]
-    }
-  ];
-  
-  return mockQuestions.slice(0, Math.min(3, mockQuestions.length));
-};
-
 export default function QuizPage() {
   const { user } = useAuth();
   const location = useLocation();
@@ -240,15 +209,6 @@ export default function QuizPage() {
         } catch (error) {
           console.error('Error generating quiz for guest, falling back to mock:', error);
           
-          // Fallback to mock questions if API fails
-          const mockQuiz: Quiz = {
-            id: `guest-${Date.now()}`,
-            title: `${newQuizTopic} Quiz`,
-            topic: newQuizTopic,
-            difficulty: newQuizDifficulty,
-            questions: generateMockQuestions(newQuizTopic, newQuizDifficulty),
-            created_at: new Date().toISOString()
-          };
 
           const updatedGuestQuizzes = [mockQuiz, ...guestQuizzes];
           setGuestQuizzes(updatedGuestQuizzes);
