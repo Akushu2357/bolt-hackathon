@@ -58,7 +58,7 @@ interface QuizAttempt {
   };
 }
 
-// Mock quiz generation for guest users
+// Mock quiz generation for guest users as fallback
 const generateMockQuestions = (topic: string, difficulty: string): Question[] => {
   const mockQuestions: Question[] = [
     {
@@ -121,31 +121,31 @@ export default function QuizPage() {
       fetchQuizzes();
       fetchAttempts();
     } else {
-      // Load guest quizzes
+      // Load guest quizzes from localStorage
       loadGuestQuizzes();
     }
   }, [user]);
 
   const loadGuestQuizzes = () => {
-    // Check if guest has already generated a quiz
-    const guestUsage = GuestLimitService.getGuestUsage();
-    
-    if (guestUsage.quizzesGenerated > 0) {
-      // Create a sample quiz to show they've used their limit
-      const sampleQuizzes: Quiz[] = [
-        {
-          id: 'guest-used',
-          title: 'Sample Quiz (Already Used)',
-          topic: 'General Knowledge',
-          difficulty: 'medium',
-          questions: generateMockQuestions('General Knowledge', 'medium'),
-          created_at: new Date().toISOString()
-        }
-      ];
-      setGuestQuizzes(sampleQuizzes);
-    } else {
-      // Show empty state for new guests
+    try {
+      const savedQuizzes = localStorage.getItem('guestQuizzes');
+      if (savedQuizzes) {
+        const parsedQuizzes = JSON.parse(savedQuizzes);
+        setGuestQuizzes(parsedQuizzes);
+      } else {
+        setGuestQuizzes([]);
+      }
+    } catch (error) {
+      console.error('Error loading guest quizzes:', error);
       setGuestQuizzes([]);
+    }
+  };
+
+  const saveGuestQuizzes = (quizzes: Quiz[]) => {
+    try {
+      localStorage.setItem('guestQuizzes', JSON.stringify(quizzes));
+    } catch (error) {
+      console.error('Error saving guest quizzes:', error);
     }
   };
   
@@ -213,20 +213,50 @@ export default function QuizPage() {
 
         setQuizzes([savedQuiz, ...quizzes]);
       } else {
-        // For guest users, create a mock quiz
-        const mockQuiz: Quiz = {
-          id: `guest-${Date.now()}`,
-          title: `${newQuizTopic} Quiz`,
-          topic: newQuizTopic,
-          difficulty: newQuizDifficulty,
-          questions: generateMockQuestions(newQuizTopic, newQuizDifficulty),
-          created_at: new Date().toISOString()
-        };
+        // For guest users, use the real QuizService but store locally
+        try {
+          const response = await QuizService.generateQuestions({
+            topic: newQuizTopic,
+            difficulty: newQuizDifficulty,
+            contexts: [], // No weak areas for guests
+            settings: quizSettings
+          });
 
-        setGuestQuizzes([mockQuiz, ...guestQuizzes]);
-        
-        // Increment guest usage
-        GuestLimitService.incrementUsage('quiz');
+          const guestQuiz: Quiz = {
+            id: `guest-${Date.now()}`,
+            title: `${newQuizTopic} Quiz`,
+            topic: newQuizTopic,
+            difficulty: newQuizDifficulty,
+            questions: response.questions,
+            created_at: new Date().toISOString()
+          };
+
+          const updatedGuestQuizzes = [guestQuiz, ...guestQuizzes];
+          setGuestQuizzes(updatedGuestQuizzes);
+          saveGuestQuizzes(updatedGuestQuizzes);
+          
+          // Increment guest usage
+          GuestLimitService.incrementUsage('quiz');
+        } catch (error) {
+          console.error('Error generating quiz for guest, falling back to mock:', error);
+          
+          // Fallback to mock questions if API fails
+          const mockQuiz: Quiz = {
+            id: `guest-${Date.now()}`,
+            title: `${newQuizTopic} Quiz`,
+            topic: newQuizTopic,
+            difficulty: newQuizDifficulty,
+            questions: generateMockQuestions(newQuizTopic, newQuizDifficulty),
+            created_at: new Date().toISOString()
+          };
+
+          const updatedGuestQuizzes = [mockQuiz, ...guestQuizzes];
+          setGuestQuizzes(updatedGuestQuizzes);
+          saveGuestQuizzes(updatedGuestQuizzes);
+          
+          // Increment guest usage
+          GuestLimitService.incrementUsage('quiz');
+        }
       }
 
       setShowCreateForm(false);
