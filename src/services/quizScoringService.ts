@@ -76,15 +76,21 @@ export class QuizScoringService {
           
           if (Array.isArray(correctAnswer)) {
             // If correct_answer is an array, check if user's answer matches any of them
-            isCorrect = correctAnswer.includes(userAnswer as number);
+            // For single choice, userAnswer should be an array with one element
+            if (Array.isArray(userAnswer) && userAnswer.length === 1) {
+              isCorrect = correctAnswer.includes(userAnswer[0]);
+            }
           } else if (typeof correctAnswer === 'number') {
-            // If correct_answer is a number (index), compare directly
-            isCorrect = userAnswer === correctAnswer;
-          } else {
+            // If correct_answer is a number (index), compare with user's selection
+            // For single choice, userAnswer should be an array with one element
+            if (Array.isArray(userAnswer) && userAnswer.length === 1) {
+              isCorrect = userAnswer[0] === correctAnswer;
+            }
+          } else if (typeof correctAnswer === 'string') {
             // If correct_answer is a string, find its index in options and compare
-            if (question.options) {
-              const correctIndex = question.options.indexOf(correctAnswer as string);
-              isCorrect = userAnswer === correctIndex;
+            if (question.options && Array.isArray(userAnswer) && userAnswer.length === 1) {
+              const correctIndex = question.options.indexOf(correctAnswer);
+              isCorrect = userAnswer[0] === correctIndex;
             }
           }
           
@@ -146,18 +152,24 @@ export class QuizScoringService {
         // Single choice: handle different correct_answer formats
         if (Array.isArray(correctAnswer)) {
           // If correct_answer is an array, check if user's answer matches any of them
-          return correctAnswer.includes(userAnswer as number);
-        } else if (typeof correctAnswer === 'number') {
-          // If correct_answer is a number (index), compare directly
-          return userAnswer === correctAnswer;
-        } else {
-          // If correct_answer is a string, find its index in options and compare
-          if (question.options) {
-            const correctIndex = question.options.indexOf(correctAnswer as string);
-            return userAnswer === correctIndex;
+          // For single choice, userAnswer should be an array with one element
+          if (Array.isArray(userAnswer) && userAnswer.length === 1) {
+            return correctAnswer.includes(userAnswer[0]);
           }
-          return false;
+        } else if (typeof correctAnswer === 'number') {
+          // If correct_answer is a number (index), compare with user's selection
+          // For single choice, userAnswer should be an array with one element
+          if (Array.isArray(userAnswer) && userAnswer.length === 1) {
+            return userAnswer[0] === correctAnswer;
+          }
+        } else if (typeof correctAnswer === 'string') {
+          // If correct_answer is a string, find its index in options and compare
+          if (question.options && Array.isArray(userAnswer) && userAnswer.length === 1) {
+            const correctIndex = question.options.indexOf(correctAnswer);
+            return userAnswer[0] === correctIndex;
+          }
         }
+        return false;
     }
   }
 
