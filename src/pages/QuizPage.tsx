@@ -1,19 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { 
   Plus, 
-  Play, 
-  Clock, 
   CheckCircle, 
-  XCircle, 
-  Trophy,
   BookOpen,
-  Target,
-  RotateCcw,
   Menu,
-  X,
   LogIn,
   Lock
 } from 'lucide-react';
@@ -208,14 +200,6 @@ export default function QuizPage() {
           GuestLimitService.incrementUsage('quiz');
         } catch (error) {
           console.error('Error generating quiz for guest, falling back to mock:', error);
-          
-
-          const updatedGuestQuizzes = [mockQuiz, ...guestQuizzes];
-          setGuestQuizzes(updatedGuestQuizzes);
-          saveGuestQuizzes(updatedGuestQuizzes);
-          
-          // Increment guest usage
-          GuestLimitService.incrementUsage('quiz');
         }
       }
 
