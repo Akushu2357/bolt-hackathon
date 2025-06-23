@@ -172,6 +172,7 @@ export default function QuizPage() {
           GuestLimitService.incrementUsage('quiz');
         } catch (error) {
           console.error('Error generating quiz for guest, falling back to mock:', error);
+
         }
       }
 
