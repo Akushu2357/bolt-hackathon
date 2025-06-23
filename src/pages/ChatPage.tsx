@@ -383,22 +383,18 @@ export default function ChatPage() {
             {/* Chat Header */}
             <div className="p-4 border-b border-gray-200 bg-white">
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-gray-900 truncate pl-12 lg:pl-0">
+
+                <h3 className="font-semibold text-gray-900 truncate pl-3 lg:pl-0">
                   {user ? (currentSession?.title || 'AI Tutor Chat') : 'AI Tutor Chat (Guest Mode)'}
                 </h3>
-                {!user && (
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm text-gray-600">
-                      {guestUsage.chats.remaining}/{guestUsage.chats.total} free chats left
-                    </span>
-                    <button
-                      onClick={() => navigate('/auth')}
-                      className="btn-primary text-sm flex items-center space-x-1"
-                    >
-                      <LogIn className="w-4 h-4" />
-                      <span>Login</span>
-                    </button>
-                  </div>
+
+                {user && (
+                  <button
+                    onClick={() => setShowSidebar(true)}
+                    className="lg:hidden mr-2 p-1 hover:bg-gray-100 rounded"
+                  >
+                    <Menu className="w-5 h-5 text-gray-600" />
+                  </button>
                 )}
               </div>
             </div>
@@ -441,7 +437,7 @@ export default function ChatPage() {
                       <div className={`px-3 py-2 sm:px-4 sm:py-2 rounded-lg ${
                         message.role === 'user'
                           ? 'bg-primary-600 text-white'
-                          : 'bg-gray-100 text-gray-900'
+                          : 'bg-gray-100 text-gray-900 max-w-[450px]'
                       }`}>
                         <p className="whitespace-pre-wrap text-sm sm:text-base">{message.content}</p>
                       </div>
@@ -505,7 +501,13 @@ export default function ChatPage() {
                   </button>
                 </div>
               )}
+              {!user && (
+                <span className="text-sm text-red-600 pl-1">
+                  *{guestUsage.chats.remaining}/{guestUsage.chats.total} free chats left
+                </span>
+              )}
             </div>
+            
           </div>
         </div>
       </div>
