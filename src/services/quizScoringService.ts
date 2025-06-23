@@ -33,8 +33,13 @@ export class QuizScoringService {
     let gradingResults: GradedQuestion[] = [];
     
     // Collect open-ended questions for batch grading
-    const openEndedQuestions = [];
-    const openEndedIndices = [];
+    const openEndedQuestions: {
+      question: string;
+      answer: string;
+      context: string;
+      questionIndex: number;
+    }[] = [];
+    const openEndedIndices: number[] = [];
     
     for (let index = 0; index < quiz.questions.length; index++) {
       const question = quiz.questions[index];
@@ -43,11 +48,11 @@ export class QuizScoringService {
       
       switch (question.type) {
         case 'multiple':
-          // Multiple choice: check if arrays match
-          const userAnswerArray = Array.isArray(userAnswer) ? userAnswer.sort() : [];
-          const correctAnswerArray = Array.isArray(correctAnswer) ? correctAnswer.sort() : [];
-          
-          if (JSON.stringify(userAnswerArray) === JSON.stringify(correctAnswerArray)) {
+          // Multiple choice: check if arrays match (by value, not reference)
+          const userAnswerArray = Array.isArray(userAnswer) ? [...userAnswer].sort() : [];
+          const correctAnswerArray = Array.isArray(correctAnswer) ? [...correctAnswer].sort() : [];
+          const arraysEqual = (a: any[], b: any[]) => a.length === b.length && a.every((v, i) => v === b[i]);
+          if (arraysEqual(userAnswerArray, correctAnswerArray)) {
             correct++;
           }
           break;
@@ -70,28 +75,28 @@ export class QuizScoringService {
           break;
           
         case 'single':
-        default:
-          // Single choice: handle different correct_answer formats
-          let isCorrect = false;
-          
+        default: {
+          // Single choice: always compare indices
+          let correctIndex: number | undefined = undefined;
           if (Array.isArray(correctAnswer)) {
-            // If correct_answer is an array, check if user's answer matches any of them
-            isCorrect = correctAnswer.includes(userAnswer as number);
+            // If correct_answer is an array, check if user's answer matches any of them (indices)
+            correctIndex = (userAnswer as number);
+            if (correctAnswer.includes(correctIndex)) {
+              correct++;
+            }
           } else if (typeof correctAnswer === 'number') {
-            // If correct_answer is a number (index), compare directly
-            isCorrect = userAnswer === correctAnswer;
-          } else {
-            // If correct_answer is a string, find its index in options and compare
-            if (question.options) {
-              const correctIndex = question.options.indexOf(correctAnswer as string);
-              isCorrect = userAnswer === correctIndex;
+            correctIndex = correctAnswer;
+            if (userAnswer === correctIndex) {
+              correct++;
+            }
+          } else if (typeof correctAnswer === 'string' && question.options) {
+            correctIndex = question.options.indexOf(correctAnswer);
+            if (userAnswer === correctIndex) {
+              correct++;
             }
           }
-          
-          if (isCorrect) {
-            correct++;
-          }
           break;
+        }
       }
     }
     
@@ -128,10 +133,12 @@ export class QuizScoringService {
     const correctAnswer = question.correct_answer;
     
     switch (question.type) {
-      case 'multiple':
-        const userAnswerArray = Array.isArray(userAnswer) ? userAnswer.sort() : [];
-        const correctAnswerArray = Array.isArray(correctAnswer) ? correctAnswer.sort() : [];
-        return JSON.stringify(userAnswerArray) === JSON.stringify(correctAnswerArray);
+      case 'multiple': {
+        // Compare arrays by value, not reference
+        const userAnswerArray = Array.isArray(userAnswer) ? [...userAnswer].sort() : [];
+        const correctAnswerArray = Array.isArray(correctAnswer) ? [...correctAnswer].sort() : [];
+        return userAnswerArray.length === correctAnswerArray.length && userAnswerArray.every((v, i) => v === correctAnswerArray[i]);
+      }
         
       case 'true_false':
         return userAnswer === correctAnswer;
@@ -142,22 +149,19 @@ export class QuizScoringService {
         return false; // Default to false, actual grading is handled elsewhere
         
       case 'single':
-      default:
-        // Single choice: handle different correct_answer formats
+      default: {
+        // Single choice: always compare indices
         if (Array.isArray(correctAnswer)) {
-          // If correct_answer is an array, check if user's answer matches any of them
+          // If correct_answer is an array, check if user's answer matches any of them (indices)
           return correctAnswer.includes(userAnswer as number);
         } else if (typeof correctAnswer === 'number') {
-          // If correct_answer is a number (index), compare directly
           return userAnswer === correctAnswer;
-        } else {
-          // If correct_answer is a string, find its index in options and compare
-          if (question.options) {
-            const correctIndex = question.options.indexOf(correctAnswer as string);
-            return userAnswer === correctIndex;
-          }
-          return false;
+        } else if (typeof correctAnswer === 'string' && question.options) {
+          const correctIndex = question.options.indexOf(correctAnswer);
+          return userAnswer === correctIndex;
         }
+        return false;
+      }
     }
   }
 
