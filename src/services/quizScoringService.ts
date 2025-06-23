@@ -1,22 +1,5 @@
 import { GradingService, GradedQuestion } from './gradingService';
-
-interface Question {
-  id: string;
-  question: string;
-  options?: string[];
-  correct_answer: number | number[] | boolean | string;
-  type: 'single' | 'multiple' | 'true_false' | 'open_ended';
-  explanation: string;
-}
-
-interface Quiz {
-  id: string;
-  title: string;
-  topic: string;
-  difficulty: 'easy' | 'medium' | 'hard';
-  questions: Question[];
-  created_at: string;
-}
+import { Question, Quiz } from '../types';
 
 export interface ScoringResult {
   score: number;
@@ -79,20 +62,22 @@ export class QuizScoringService {
           // Single choice: always compare indices
           let correctIndex: number | undefined = undefined;
           if (Array.isArray(correctAnswer)) {
-            // If correct_answer is an array, check if user's answer matches any of them (indices)
-            correctIndex = (userAnswer as number);
-            if (correctAnswer.includes(correctIndex)) {
-              correct++;
+            // If correct_answer is an array, check if user's answer matches any of them
+            // For single choice, userAnswer should be an array with one element
+            if (Array.isArray(userAnswer) && userAnswer.length === 1) {
+              isCorrect = correctAnswer.includes(userAnswer[0]);
             }
           } else if (typeof correctAnswer === 'number') {
-            correctIndex = correctAnswer;
-            if (userAnswer === correctIndex) {
-              correct++;
+            // If correct_answer is a number (index), compare with user's selection
+            // For single choice, userAnswer should be an array with one element
+            if (Array.isArray(userAnswer) && userAnswer.length === 1) {
+              isCorrect = userAnswer[0] === correctAnswer;
             }
-          } else if (typeof correctAnswer === 'string' && question.options) {
-            correctIndex = question.options.indexOf(correctAnswer);
-            if (userAnswer === correctIndex) {
-              correct++;
+          } else if (typeof correctAnswer === 'string') {
+            // If correct_answer is a string, find its index in options and compare
+            if (question.options && Array.isArray(userAnswer) && userAnswer.length === 1) {
+              const correctIndex = question.options.indexOf(correctAnswer);
+              isCorrect = userAnswer[0] === correctIndex;
             }
           }
           break;
@@ -152,16 +137,25 @@ export class QuizScoringService {
       default: {
         // Single choice: always compare indices
         if (Array.isArray(correctAnswer)) {
-          // If correct_answer is an array, check if user's answer matches any of them (indices)
-          return correctAnswer.includes(userAnswer as number);
+          // If correct_answer is an array, check if user's answer matches any of them
+          // For single choice, userAnswer should be an array with one element
+          if (Array.isArray(userAnswer) && userAnswer.length === 1) {
+            return correctAnswer.includes(userAnswer[0]);
+          }
         } else if (typeof correctAnswer === 'number') {
-          return userAnswer === correctAnswer;
-        } else if (typeof correctAnswer === 'string' && question.options) {
-          const correctIndex = question.options.indexOf(correctAnswer);
-          return userAnswer === correctIndex;
+          // If correct_answer is a number (index), compare with user's selection
+          // For single choice, userAnswer should be an array with one element
+          if (Array.isArray(userAnswer) && userAnswer.length === 1) {
+            return userAnswer[0] === correctAnswer;
+          }
+        } else if (typeof correctAnswer === 'string') {
+          // If correct_answer is a string, find its index in options and compare
+          if (question.options && Array.isArray(userAnswer) && userAnswer.length === 1) {
+            const correctIndex = question.options.indexOf(correctAnswer);
+            return userAnswer[0] === correctIndex;
+          }
         }
         return false;
-      }
     }
   }
 

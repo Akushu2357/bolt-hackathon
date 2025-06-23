@@ -1,23 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { GradingService, GradedQuestion } from './gradingService';
-
-interface Question {
-  id: string;
-  question: string;
-  options?: string[];
-  correct_answer: number | number[] | boolean | string;
-  type: 'single' | 'multiple' | 'true_false' | 'open_ended';
-  explanation: string;
-}
-
-interface Quiz {
-  id: string;
-  title: string;
-  topic: string;
-  difficulty: 'easy' | 'medium' | 'hard';
-  questions: Question[];
-  created_at: string;
-}
+import { Question, Quiz } from '../types';
 
 export class LearningProgressService {
   static async updateLearningProgress(
@@ -67,8 +50,27 @@ export class LearningProgressService {
             isCorrect = false; // Default to incorrect if no grading results
           }
           break;
+        case 'single':
         default:
-          isCorrect = userAnswer === correctAnswer;
+          // Handle single choice questions properly
+          if (Array.isArray(correctAnswer)) {
+            // If correct_answer is an array, check if user's answer matches any of them
+            if (Array.isArray(userAnswer) && userAnswer.length === 1) {
+              isCorrect = correctAnswer.includes(userAnswer[0]);
+            }
+          } else if (typeof correctAnswer === 'number') {
+            // If correct_answer is a number (index), compare with user's selection
+            if (Array.isArray(userAnswer) && userAnswer.length === 1) {
+              isCorrect = userAnswer[0] === correctAnswer;
+            }
+          } else if (typeof correctAnswer === 'string') {
+            // If correct_answer is a string, find its index in options and compare
+            if (question.options && Array.isArray(userAnswer) && userAnswer.length === 1) {
+              const correctIndex = question.options.indexOf(correctAnswer);
+              isCorrect = userAnswer[0] === correctIndex;
+            }
+          }
+          break;
       }
 
       // Build answer string safely for all types
@@ -91,22 +93,30 @@ export class LearningProgressService {
         answerString = String(userAnswer);
       }
 
-      // Create area description with full question text
-      const areaString = question.question; // Use full question text instead of truncating
+      // Create formatted entry: "question: answer" or "question: answer: ai feedback"
+      let entryString = `${question.question}: ${answerString}`;
+      
+      // For open-ended questions, add AI feedback if available
+      if (question.type === 'open_ended' && gradingResult && gradingResult.feedback) {
+        entryString += `: ${gradingResult.feedback}`;
+      }
       
       if (isCorrect || (gradingResult && gradingResult.grade === 'partial')) {
-        currentStrengths.push(areaString);
+        currentStrengths.push(entryString);
       } else {
-        currentWeakAreas.push(areaString);
+        currentWeakAreas.push(entryString);
         
         // Add specific weak areas from grading results for open-ended questions
         if (gradingResult && gradingResult.weakAreas && gradingResult.weakAreas.length > 0) {
-          currentWeakAreas.push(...gradingResult.weakAreas);
+          // Format weak areas as concepts, not full question-answer pairs
+          gradingResult.weakAreas.forEach(area => {
+            currentWeakAreas.push(area);
+          });
         }
       }
     }
 
-    // Add general weak areas from grading results
+    // Add general weak areas from grading results (concepts only)
     if (gradingResults && gradingResults.length > 0) {
       const additionalWeakAreas = GradingService.extractWeakAreasFromGrading(gradingResults);
       currentWeakAreas.push(...additionalWeakAreas);
@@ -127,17 +137,25 @@ export class LearningProgressService {
       if (existingProgress) {
         // Preserve historical data and add new results
         // For weak areas: keep existing ones and add new ones (but remove items that are now strengths)
-        const existingWeakAreas = Array.isArray(existingProgress.weak_areas) ? existingProgress.weak_areas.filter(area => typeof area === 'string') : [];
-        const existingStrengths = Array.isArray(existingProgress.strengths) ? existingProgress.strengths.filter(area => typeof area === 'string') : [];
+        const existingWeakAreas = Array.isArray(existingProgress.weak_areas) ? existingProgress.weak_areas.filter((area: unknown): area is string => typeof area === 'string') : [];
+        const existingStrengths = Array.isArray(existingProgress.strengths) ? existingProgress.strengths.filter((area: unknown): area is string => typeof area === 'string') : [];
         
-        // Remove current strengths from existing weak areas (showing improvement)
+        // Extract question parts from existing entries to check for improvements
+        const getQuestionFromEntry = (entry: string) => {
+          const colonIndex = entry.indexOf(':');
+          return colonIndex > 0 ? entry.substring(0, colonIndex).trim() : entry;
+        };
+        
+        // Remove entries from existing weak areas if the same question is now a strength
+        const currentStrengthQuestions = uniqueCurrentStrengths.map(getQuestionFromEntry);
         const filteredExistingWeakAreas = existingWeakAreas.filter(
-          area => !uniqueCurrentStrengths.includes(area)
+          (area: unknown): area is string  => !currentStrengthQuestions.includes(getQuestionFromEntry(area as string))
         );
         
-        // Remove current weak areas from existing strengths (showing regression)
+        // Remove entries from existing strengths if the same question is now a weak area
+        const currentWeakQuestions = uniqueCurrentWeakAreas.map(getQuestionFromEntry);
         const filteredExistingStrengths = existingStrengths.filter(
-          area => !uniqueCurrentWeakAreas.includes(area)
+          (area: unknown): area is string  => !currentWeakQuestions.includes(getQuestionFromEntry(area as string))
         );
         
         // Merge with current results and ensure all are strings
