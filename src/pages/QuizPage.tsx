@@ -30,7 +30,7 @@ export default function QuizPage() {
   const [attempts, setAttempts] = useState<QuizAttempt[]>([]);
   const [currentQuiz, setCurrentQuiz] = useState<Quiz | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [selectedAnswers, setSelectedAnswers] = useState<(number[] | string | boolean)[]>([]);
+  const [selectedAnswers, setSelectedAnswers] = useState<(number[] | string | boolean | undefined)[]>([]);
   const [loading, setLoading] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newQuizTopic, setNewQuizTopic] = useState('');
@@ -202,7 +202,7 @@ export default function QuizPage() {
         case 'open_ended':
           return '';
         case 'true_false':
-          return false;
+          return undefined;
         default:
           return [];
       }
@@ -255,15 +255,25 @@ export default function QuizPage() {
     if (!currentQuiz) return;
 
     try {
+      // Filter out unanswered (undefined) answers before scoring
+      const filteredAnswers = selectedAnswers.map((ans, idx) => {
+        const q = currentQuiz.questions[idx];
+        if (q.type === 'true_false' && typeof ans === 'undefined') {
+          // Treat unanswered true/false as false (or you can choose another default)
+          return false;
+        }
+        return ans;
+      }) as (string | number | boolean | number[])[];
+
       // Calculate score using the scoring service
-      const scoringResult = await QuizScoringService.calculateScore(currentQuiz, selectedAnswers);
-      
+      const scoringResult = await QuizScoringService.calculateScore(currentQuiz, filteredAnswers);
+
       if (user) {
         // Save quiz attempt for authenticated users
         await QuizDataService.saveQuizAttempt(
           currentQuiz.id,
           user.id,
-          selectedAnswers,
+          filteredAnswers,
           scoringResult.score
         );
 
@@ -271,7 +281,7 @@ export default function QuizPage() {
         await LearningProgressService.updateLearningProgress(
           user.id,
           currentQuiz,
-          selectedAnswers,
+          filteredAnswers,
           scoringResult.score,
           scoringResult.gradingResults
         );
@@ -281,17 +291,17 @@ export default function QuizPage() {
         // For guest users, just increment the attempt counter
         GuestLimitService.incrementUsage('quizAttempt');
       }
-      
+
       // Navigate to results page with quiz data
       navigate('/quiz-results', {
         state: {
           quiz: currentQuiz,
-          selectedAnswers: selectedAnswers,
+          selectedAnswers: filteredAnswers,
           score: scoringResult.score,
           gradingResults: scoringResult.gradingResults
         }
       });
-      
+
     } catch (error) {
       console.error('Error finishing quiz:', error);
     }
@@ -471,18 +481,18 @@ export default function QuizPage() {
                 renderInput={renderQuestionInput}
               />
               {/* Navigation */}
-              <div className="flex flex-col sm:flex-row justify-between space-y-3 sm:space-y-0 sm:space-x-4">
+              <div className="flex flex-col sm:flex-row justify-between space-y-3 sm:space-y-0 sm:space-x-4 gap-2">
                 <button
                   onClick={() => setCurrentQuestionIndex(Math.max(0, currentQuestionIndex - 1))}
                   disabled={currentQuestionIndex === 0}
-                  className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed order-2 sm:order-1"
+                  className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed order-2 sm:order-1 w-full"
                 >
                   Previous
                 </button>
                 <button
                   onClick={nextQuestion}
                   disabled={!isAnswerSelected()}
-                  className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed order-1 sm:order-2"
+                  className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed order-1 sm:order-2 w-full"
                 >
                   {currentQuestionIndex === currentQuiz.questions.length - 1 ? 'Finish' : 'Next'}
                 </button>
