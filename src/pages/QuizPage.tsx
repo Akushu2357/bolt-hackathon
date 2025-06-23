@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { 
   Plus, 
@@ -12,17 +13,21 @@ import {
   Target,
   RotateCcw,
   Menu,
-  X
+  X,
+  LogIn,
+  Lock
 } from 'lucide-react';
 import QuizHeader from '../components/QuizPage/QuizHeader';
 import QuizQuestion from '../components/QuizPage/QuizQuestion';
 import QuizList from '../components/QuizPage/QuizList';
 import CreateQuizForm from '../components/QuizPage/CreateQuizForm';
 import RecentAttemptsSidebar from '../components/QuizPage/RecentAttemptsSidebar';
+import GuestLimitModal from '../components/common/GuestLimitModal';
 import { QuizService, QuizSettings } from '../services/quizService';
 import { QuizDataService } from '../services/quizDataService';
 import { QuizScoringService } from '../services/quizScoringService';
 import { LearningProgressService } from '../services/learningProgressService';
+import { GuestLimitService } from '../services/guestLimitService';
 
 interface Question {
   id: string;
@@ -67,6 +72,9 @@ export default function QuizPage() {
   const [newQuizTopic, setNewQuizTopic] = useState('');
   const [newQuizDifficulty, setNewQuizDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [showSidebar, setShowSidebar] = useState(false);
+  const [guestQuizzes, setGuestQuizzes] = useState<Quiz[]>([]);
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const [limitModalType, setLimitModalType] = useState<'quiz' | 'quizAttempt'>('quiz');
   const [quizSettings, setQuizSettings] = useState<QuizSettings>({
     numberOfQuestions: 5,
     numberOfChoices: 4,
@@ -76,14 +84,40 @@ export default function QuizPage() {
       openEnded: false
     }
   });
-
+  
   useEffect(() => {
     if (user) {
       fetchQuizzes();
       fetchAttempts();
+    } else {
+      // Load guest quizzes from localStorage
+      loadGuestQuizzes();
     }
   }, [user]);
 
+  const loadGuestQuizzes = () => {
+    try {
+      const savedQuizzes = localStorage.getItem('guestQuizzes');
+      if (savedQuizzes) {
+        const parsedQuizzes = JSON.parse(savedQuizzes);
+        setGuestQuizzes(parsedQuizzes);
+      } else {
+        setGuestQuizzes([]);
+      }
+    } catch (error) {
+      console.error('Error loading guest quizzes:', error);
+      setGuestQuizzes([]);
+    }
+  };
+
+  const saveGuestQuizzes = (quizzes: Quiz[]) => {
+    try {
+      localStorage.setItem('guestQuizzes', JSON.stringify(quizzes));
+    } catch (error) {
+      console.error('Error saving guest quizzes:', error);
+    }
+  };
+  
   // Handle starting a quiz from navigation state
   useEffect(() => {
     if (location.state?.startQuiz) {
@@ -114,31 +148,77 @@ export default function QuizPage() {
   };
 
   const generateQuiz = async () => {
-    if (!newQuizTopic.trim() || !user) return;
+    if (!newQuizTopic.trim()) return;
+
+    // Check guest limits for quiz generation
+    if (!user && !GuestLimitService.canPerformAction('quiz')) {
+      setLimitModalType('quiz');
+      setShowLimitModal(true);
+      return;
+    }
 
     setLoading(true);
     try {
-      // Get user's weak areas for this topic to focus on
-      const weakAreas = await QuizService.getUserWeakAreas(user.id, newQuizTopic);
-      
-      // Generate questions using the quiz service
-      const response = await QuizService.generateQuestions({
-        topic: newQuizTopic,
-        difficulty: newQuizDifficulty,
-        contexts: weakAreas.slice(0, 3), // Use top 3 weak areas as context
-        settings: quizSettings
-      });
+      if (user) {
+        // Get user's weak areas for this topic to focus on
+        const weakAreas = await QuizService.getUserWeakAreas(user.id, newQuizTopic);
+        
+        // Generate questions using the quiz service
+        const response = await QuizService.generateQuestions({
+          topic: newQuizTopic,
+          difficulty: newQuizDifficulty,
+          contexts: weakAreas.slice(0, 3), // Use top 3 weak areas as context
+          settings: quizSettings
+        });
 
-      // Save the quiz to database
-      const savedQuiz = await QuizDataService.saveQuiz(
-        user.id,
-        `${newQuizTopic} Quiz`,
-        newQuizTopic,
-        newQuizDifficulty,
-        response.questions
-      );
+        // Save the quiz to database
+        const savedQuiz = await QuizDataService.saveQuiz(
+          user.id,
+          `${newQuizTopic} Quiz`,
+          newQuizTopic,
+          newQuizDifficulty,
+          response.questions
+        );
 
-      setQuizzes([savedQuiz, ...quizzes]);
+        setQuizzes([savedQuiz, ...quizzes]);
+      } else {
+        // For guest users, use the real QuizService but store locally
+        try {
+          const response = await QuizService.generateQuestions({
+            topic: newQuizTopic,
+            difficulty: newQuizDifficulty,
+            contexts: [], // No weak areas for guests
+            settings: quizSettings
+          });
+
+          const guestQuiz: Quiz = {
+            id: `guest-${Date.now()}`,
+            title: `${newQuizTopic} Quiz`,
+            topic: newQuizTopic,
+            difficulty: newQuizDifficulty,
+            questions: response.questions,
+            created_at: new Date().toISOString()
+          };
+
+          const updatedGuestQuizzes = [guestQuiz, ...guestQuizzes];
+          setGuestQuizzes(updatedGuestQuizzes);
+          saveGuestQuizzes(updatedGuestQuizzes);
+          
+          // Increment guest usage
+          GuestLimitService.incrementUsage('quiz');
+        } catch (error) {
+          console.error('Error generating quiz for guest, falling back to mock:', error);
+          
+
+          const updatedGuestQuizzes = [mockQuiz, ...guestQuizzes];
+          setGuestQuizzes(updatedGuestQuizzes);
+          saveGuestQuizzes(updatedGuestQuizzes);
+          
+          // Increment guest usage
+          GuestLimitService.incrementUsage('quiz');
+        }
+      }
+
       setShowCreateForm(false);
       setNewQuizTopic('');
     } catch (error) {
@@ -150,6 +230,13 @@ export default function QuizPage() {
   };
 
   const startQuiz = (quiz: Quiz) => {
+    // Check guest limits for quiz attempts
+    if (!user && !GuestLimitService.canPerformAction('quizAttempt')) {
+      setLimitModalType('quizAttempt');
+      setShowLimitModal(true);
+      return;
+    }
+
     setCurrentQuiz(quiz);
     setCurrentQuestionIndex(0);
     // Initialize answers based on question type
@@ -208,28 +295,35 @@ export default function QuizPage() {
   };
 
   const finishQuiz = async () => {
-    if (!currentQuiz || !user) return;
+    if (!currentQuiz) return;
 
     try {
       // Calculate score using the scoring service
       const scoringResult = await QuizScoringService.calculateScore(currentQuiz, selectedAnswers);
       
-      // Save quiz attempt
-      await QuizDataService.saveQuizAttempt(
-        currentQuiz.id,
-        user.id,
-        selectedAnswers,
-        scoringResult.score
-      );
+      if (user) {
+        // Save quiz attempt for authenticated users
+        await QuizDataService.saveQuizAttempt(
+          currentQuiz.id,
+          user.id,
+          selectedAnswers,
+          scoringResult.score
+        );
 
-      // Update learning progress
-      await LearningProgressService.updateLearningProgress(
-        user.id,
-        currentQuiz,
-        selectedAnswers,
-        scoringResult.score,
-        scoringResult.gradingResults
-      );
+        // Update learning progress
+        await LearningProgressService.updateLearningProgress(
+          user.id,
+          currentQuiz,
+          selectedAnswers,
+          scoringResult.score,
+          scoringResult.gradingResults
+        );
+        
+        fetchAttempts();
+      } else {
+        // For guest users, just increment the attempt counter
+        GuestLimitService.incrementUsage('quizAttempt');
+      }
       
       // Navigate to results page with quiz data
       navigate('/quiz-results', {
@@ -241,7 +335,6 @@ export default function QuizPage() {
         }
       });
       
-      fetchAttempts();
     } catch (error) {
       console.error('Error finishing quiz:', error);
     }
@@ -394,6 +487,10 @@ export default function QuizPage() {
     }
   };
 
+  const availableQuizzes = user ? quizzes : guestQuizzes;
+  const guestUsage = GuestLimitService.getUsageSummary();
+  const canGenerateQuiz = user || GuestLimitService.canPerformAction('quiz');
+
   if (currentQuiz) {
     const currentQuestion = currentQuiz.questions[currentQuestionIndex];
     const progress = ((currentQuestionIndex + 1) / currentQuiz.questions.length) * 100;
@@ -414,7 +511,6 @@ export default function QuizPage() {
             <div className="p-4 sm:p-6">
               <QuizQuestion
                 question={currentQuestion}
-                currentAnswer={selectedAnswers[currentQuestionIndex]}
                 renderInput={renderQuestionInput}
               />
               {/* Navigation */}
@@ -448,9 +544,25 @@ export default function QuizPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 sm:mb-8 space-y-4 sm:space-y-0">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Quizzes</h1>
-            <p className="text-gray-600">Test your knowledge and track your progress</p>
+            <p className="text-gray-600">
+              {user ? 'Test your knowledge and track your progress' : 'Test your knowledge - Login for detailed analysis'}
+            </p>
+            {!user && (
+              <div className="mt-2 text-sm text-gray-500">
+                Quiz generation: {guestUsage.quizzes.remaining}/{guestUsage.quizzes.total} remaining
+              </div>
+            )}
           </div>
           <div className="flex space-x-3">
+            {!user && (
+              <button
+                onClick={() => navigate('/auth')}
+                className="btn-secondary flex items-center space-x-2"
+              >
+                <LogIn className="w-4 h-4" />
+                <span className="hidden sm:inline">Login</span>
+              </button>
+            )}
             <button
               onClick={() => setShowSidebar(!showSidebar)}
               className="btn-secondary lg:hidden"
@@ -458,15 +570,35 @@ export default function QuizPage() {
               <Menu className="w-4 h-4" />
             </button>
             <button
-              onClick={() => setShowCreateForm(true)}
-              className="btn-primary flex items-center space-x-2"
+              onClick={() => canGenerateQuiz ? setShowCreateForm(true) : setShowLimitModal(true)}
+              className={`btn-primary flex items-center space-x-2 ${!canGenerateQuiz ? 'opacity-75' : ''}`}
             >
+              {!canGenerateQuiz && <Lock className="w-4 h-4" />}
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Generate Quiz</span>
               <span className="sm:hidden">New</span>
             </button>
           </div>
         </div>
+
+        {/* Guest limit warning */}
+        {!user && !canGenerateQuiz && (
+          <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+            <div className="flex items-center space-x-2 text-orange-700">
+              <Lock className="w-5 h-5" />
+              <span className="font-medium">Quiz Generation Limit Reached</span>
+            </div>
+            <p className="text-orange-600 text-sm mt-2">
+              You've used your free quiz generation. Login to create unlimited quizzes and access detailed analytics!
+            </p>
+            <button
+              onClick={() => navigate('/auth')}
+              className="mt-3 btn-primary text-sm"
+            >
+              Login for Unlimited Access
+            </button>
+          </div>
+        )}
 
         {/* Create Quiz Form */}
         {showCreateForm && (
@@ -491,37 +623,60 @@ export default function QuizPage() {
           {/* Main Content */}
           <div className="flex-1">
             <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">Available Quizzes</h2>
-            {quizzes.length === 0 ? (
+            {availableQuizzes.length === 0 ? (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 sm:p-12 text-center">
                 <BookOpen className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No quizzes yet</h3>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  {!user && !canGenerateQuiz ? 'Quiz Limit Reached' : 'No quizzes yet'}
+                </h3>
                 <p className="text-gray-600 mb-4">
-                  Generate your first quiz to start testing your knowledge
+                  {!user && !canGenerateQuiz 
+                    ? 'You\'ve used your free quiz generation. Login for unlimited access!'
+                    : 'Generate your first quiz to start testing your knowledge'
+                  }
                 </p>
-                <button
-                  onClick={() => setShowCreateForm(true)}
-                  className="btn-primary"
-                >
-                  Generate Quiz
-                </button>
+                {canGenerateQuiz ? (
+                  <button
+                    onClick={() => setShowCreateForm(true)}
+                    className="btn-primary"
+                  >
+                    Generate Quiz
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => navigate('/auth')}
+                    className="btn-primary"
+                  >
+                    Login for Unlimited Quizzes
+                  </button>
+                )}
               </div>
             ) : (
               <QuizList
-                quizzes={quizzes}
+                quizzes={availableQuizzes}
                 onStart={startQuiz}
                 getDifficultyColor={getDifficultyColor}
               />
             )}
           </div>
 
-          {/* Sidebar */}
-          <RecentAttemptsSidebar
-            attempts={attempts}
-            showSidebar={showSidebar}
-            onClose={() => setShowSidebar(false)}
-          />
+          {/* Sidebar - Only show for authenticated users */}
+          {user && (
+            <RecentAttemptsSidebar
+              attempts={attempts}
+              showSidebar={showSidebar}
+              onClose={() => setShowSidebar(false)}
+            />
+          )}
         </div>
       </div>
+
+      {/* Guest Limit Modal */}
+      <GuestLimitModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        limitType={limitModalType}
+      />
     </div>
   );
 }

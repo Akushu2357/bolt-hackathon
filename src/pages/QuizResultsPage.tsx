@@ -20,7 +20,9 @@ import {
   Clock,
   Award,
   BarChart3,
-  PieChart
+  PieChart,
+  Lock,
+  LogIn
 } from 'lucide-react';
 
 import ScoreOverview from '../components/QuizResultsPage/ScoreOverview';
@@ -28,6 +30,7 @@ import PerformanceAnalysis from '../components/QuizResultsPage/PerformanceAnalys
 import DetailedReview from '../components/QuizResultsPage/DetailedReview';
 import Recommendations from '../components/QuizResultsPage/Recommendations';
 import QuizPerformanceSidebar from '../components/QuizResultsPage/QuizPerformanceSidebar';
+import GuestLimitModal from '../components/common/GuestLimitModal';
 import { QuizScoringService } from '../services/quizScoringService';
 import { GradedQuestion } from '../services/gradingService';
 
@@ -78,6 +81,7 @@ export default function QuizResultsPage() {
   const [expandedQuestion, setExpandedQuestion] = useState<number | null>(null);
   const [quizStats, setQuizStats] = useState<QuizStats | null>(null);
   const [loadingStats, setLoadingStats] = useState(true);
+  const [showLimitModal, setShowLimitModal] = useState(false);
 
   const state = location.state as QuizResultsState;
 
@@ -87,8 +91,12 @@ export default function QuizResultsPage() {
       return;
     }
     generateAnalysis();
-    fetchQuizStats();
-  }, [state, navigate]);
+    if (user) {
+      fetchQuizStats();
+    } else {
+      setLoadingStats(false);
+    }
+  }, [state, navigate, user]);
 
   const fetchQuizStats = async () => {
     if (!user) return;
@@ -180,73 +188,88 @@ export default function QuizResultsPage() {
         return getAnswerGrade(index) === 'incorrect';
       });
 
-      // Generate personalized analysis using the actual score
+      // Generate basic analysis for guest users, detailed for authenticated users
       let analysis = '';
       
-      if (actualScore >= 90) {
-        analysis = `🎉 Outstanding performance! You've demonstrated excellent mastery of ${quiz.topic}. Your ${actualScore}% score shows you have a strong understanding of the core concepts. `;
-        if (incorrectQuestions.length > 0) {
-          analysis += `Focus on reviewing the ${incorrectQuestions.length} question(s) you missed to achieve perfect understanding. `;
+      if (!user) {
+        // Basic analysis for guest users
+        if (actualScore >= 80) {
+          analysis = `Great job! You scored ${actualScore}% on this ${quiz.topic} quiz. You got ${correctCount} out of ${quiz.questions.length} questions correct. `;
+          analysis += `Login to get detailed feedback, track your progress, and access unlimited quizzes!`;
+        } else if (actualScore >= 60) {
+          analysis = `Good effort! You scored ${actualScore}% on this ${quiz.topic} quiz. You got ${correctCount} out of ${quiz.questions.length} questions correct. `;
+          analysis += `Login to see detailed explanations, identify weak areas, and improve your understanding!`;
+        } else {
+          analysis = `You scored ${actualScore}% on this ${quiz.topic} quiz. You got ${correctCount} out of ${quiz.questions.length} questions correct. `;
+          analysis += `Login to access detailed feedback, personalized learning recommendations, and unlimited practice quizzes!`;
         }
-        if (partialCount > 0) {
-          analysis += `You received partial credit on ${partialCount} question(s), showing good understanding that can be refined. `;
-        }
-        analysis += `Consider challenging yourself with harder difficulty levels or exploring advanced topics in ${quiz.topic}.`;
-      } else if (actualScore >= 80) {
-        analysis = `👏 Great job! Your ${actualScore}% score indicates solid understanding of ${quiz.topic}. You're on the right track with ${correctCount} fully correct answers out of ${quiz.questions.length}. `;
-        if (partialCount > 0) {
-          analysis += `You also received partial credit on ${partialCount} question(s), which shows you're grasping the concepts but can improve your explanations. `;
-        }
-        if (incorrectQuestions.length > 0) {
-          analysis += `Review the ${incorrectQuestions.length} areas where you had difficulty - these represent opportunities for growth. `;
-        }
-        analysis += `With a bit more practice, you'll master this topic completely.`;
-      } else if (actualScore >= 60) {
-        analysis = `📚 Good effort! You scored ${actualScore}%, showing you understand the basics of ${quiz.topic}. You got ${correctCount} questions fully right`;
-        if (partialCount > 0) {
-          analysis += ` and ${partialCount} partially correct`;
-        }
-        analysis += `, which is a solid foundation. `;
-        analysis += `Focus on the ${incorrectQuestions.length} questions you missed - understanding these concepts will significantly improve your knowledge. `;
-        analysis += `Consider reviewing the explanations and taking additional practice quizzes to strengthen your understanding.`;
       } else {
-        analysis = `💪 Don't worry - learning is a journey! Your ${actualScore}% score shows you're building foundational knowledge in ${quiz.topic}. `;
-        analysis += `You got ${correctCount} questions fully correct`;
-        if (partialCount > 0) {
-          analysis += ` and ${partialCount} partially correct`;
+        // Detailed analysis for authenticated users (existing logic)
+        if (actualScore >= 90) {
+          analysis = `🎉 Outstanding performance! You've demonstrated excellent mastery of ${quiz.topic}. Your ${actualScore}% score shows you have a strong understanding of the core concepts. `;
+          if (incorrectQuestions.length > 0) {
+            analysis += `Focus on reviewing the ${incorrectQuestions.length} question(s) you missed to achieve perfect understanding. `;
+          }
+          if (partialCount > 0) {
+            analysis += `You received partial credit on ${partialCount} question(s), showing good understanding that can be refined. `;
+          }
+          analysis += `Consider challenging yourself with harder difficulty levels or exploring advanced topics in ${quiz.topic}.`;
+        } else if (actualScore >= 80) {
+          analysis = `👏 Great job! Your ${actualScore}% score indicates solid understanding of ${quiz.topic}. You're on the right track with ${correctCount} fully correct answers out of ${quiz.questions.length}. `;
+          if (partialCount > 0) {
+            analysis += `You also received partial credit on ${partialCount} question(s), which shows you're grasping the concepts but can improve your explanations. `;
+          }
+          if (incorrectQuestions.length > 0) {
+            analysis += `Review the ${incorrectQuestions.length} areas where you had difficulty - these represent opportunities for growth. `;
+          }
+          analysis += `With a bit more practice, you'll master this topic completely.`;
+        } else if (actualScore >= 60) {
+          analysis = `📚 Good effort! You scored ${actualScore}%, showing you understand the basics of ${quiz.topic}. You got ${correctCount} questions fully right`;
+          if (partialCount > 0) {
+            analysis += ` and ${partialCount} partially correct`;
+          }
+          analysis += `, which is a solid foundation. `;
+          analysis += `Focus on the ${incorrectQuestions.length} questions you missed - understanding these concepts will significantly improve your knowledge. `;
+          analysis += `Consider reviewing the explanations and taking additional practice quizzes to strengthen your understanding.`;
+        } else {
+          analysis = `💪 Don't worry - learning is a journey! Your ${actualScore}% score shows you're building foundational knowledge in ${quiz.topic}. `;
+          analysis += `You got ${correctCount} questions fully correct`;
+          if (partialCount > 0) {
+            analysis += ` and ${partialCount} partially correct`;
+          }
+          analysis += `, which means you're already grasping some key concepts. `;
+          analysis += `Focus on understanding the explanations for the questions you missed. Consider reviewing the basic concepts and taking the quiz again to track your improvement.`;
         }
-        analysis += `, which means you're already grasping some key concepts. `;
-        analysis += `Focus on understanding the explanations for the questions you missed. Consider reviewing the basic concepts and taking the quiz again to track your improvement.`;
-      }
 
-      // Add specific recommendations based on question types missed
-      const missedTypes = incorrectQuestions.map(q => q.type);
-      if (missedTypes.includes('multiple')) {
-        analysis += ` Pay special attention to multiple-choice questions - they often test comprehensive understanding of topics.`;
-      }
-      if (missedTypes.includes('open_ended')) {
-        analysis += ` Work on articulating your thoughts clearly for open-ended questions.`;
-      }
+        // Add specific recommendations based on question types missed (only for authenticated users)
+        const missedTypes = incorrectQuestions.map(q => q.type);
+        if (missedTypes.includes('multiple')) {
+          analysis += ` Pay special attention to multiple-choice questions - they often test comprehensive understanding of topics.`;
+        }
+        if (missedTypes.includes('open_ended')) {
+          analysis += ` Work on articulating your thoughts clearly for open-ended questions.`;
+        }
 
-      // Add insights from grading results if available
-      if (gradingResults && gradingResults.length > 0) {
-        const partialCredits = gradingResults.filter(r => r.grade === 'partial').length;
-        const incorrectOpenEnded = gradingResults.filter(r => r.grade === 'incorrect').length;
-        const correctOpenEnded = gradingResults.filter(r => r.grade === 'correct').length;
-        
-        if (partialCredits > 0) {
-          analysis += ` You received partial credit on ${partialCredits} open-ended question(s), showing good understanding that can be improved with more detail and clarity.`;
-        }
-        
-        if (correctOpenEnded > 0) {
-          analysis += ` Your ${correctOpenEnded} fully correct open-ended answer(s) demonstrate strong analytical and communication skills.`;
-        }
-        
-        // Extract common weak areas from AI grading
-        const allWeakAreas = gradingResults.flatMap(r => r.weakAreas || []);
-        const uniqueWeakAreas = [...new Set(allWeakAreas)];
-        if (uniqueWeakAreas.length > 0) {
-          analysis += ` Key areas to focus on: ${uniqueWeakAreas.slice(0, 3).join(', ')}.`;
+        // Add insights from grading results if available (only for authenticated users)
+        if (gradingResults && gradingResults.length > 0) {
+          const partialCredits = gradingResults.filter(r => r.grade === 'partial').length;
+          const incorrectOpenEnded = gradingResults.filter(r => r.grade === 'incorrect').length;
+          const correctOpenEnded = gradingResults.filter(r => r.grade === 'correct').length;
+          
+          if (partialCredits > 0) {
+            analysis += ` You received partial credit on ${partialCredits} open-ended question(s), showing good understanding that can be improved with more detail and clarity.`;
+          }
+          
+          if (correctOpenEnded > 0) {
+            analysis += ` Your ${correctOpenEnded} fully correct open-ended answer(s) demonstrate strong analytical and communication skills.`;
+          }
+          
+          // Extract common weak areas from AI grading
+          const allWeakAreas = gradingResults.flatMap(r => r.weakAreas || []);
+          const uniqueWeakAreas = [...new Set(allWeakAreas)];
+          if (uniqueWeakAreas.length > 0) {
+            analysis += ` Key areas to focus on: ${uniqueWeakAreas.slice(0, 3).join(', ')}.`;
+          }
         }
       }
 
@@ -296,6 +319,14 @@ export default function QuizResultsPage() {
     });
   };
 
+  const handleShowAnswers = () => {
+    if (!user) {
+      setShowLimitModal(true);
+      return;
+    }
+    setShowAnswers(!showAnswers);
+  };
+
   if (!state) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -341,11 +372,29 @@ export default function QuizResultsPage() {
               Quiz Results: {quiz.title}
             </h1>
             <p className="text-gray-600">{quiz.topic} • {quiz.difficulty} difficulty</p>
+            {!user && (
+              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center justify-center space-x-2 text-blue-700">
+                  <Lock className="w-5 h-5" />
+                  <span className="font-medium">Limited Guest Access</span>
+                </div>
+                <p className="text-blue-600 text-sm mt-2">
+                  Login to access detailed feedback, progress tracking, and unlimited quizzes!
+                </p>
+                <button
+                  onClick={() => navigate('/auth')}
+                  className="mt-3 btn-primary flex items-center space-x-2 mx-auto"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span>Login for Full Access</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* AI Grading Summary for Open-Ended Questions */}
-        {gradingResults && gradingResults.length > 0 && (
+        {/* AI Grading Summary for Open-Ended Questions - Only for authenticated users */}
+        {user && gradingResults && gradingResults.length > 0 && (
           <div className="mb-6 sm:mb-8">
             <div className="bg-gradient-to-br from-indigo-50 via-white to-purple-50 rounded-xl shadow-lg border border-indigo-200 p-4 sm:p-6 relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 to-purple-500/5 pointer-events-none"></div>
@@ -424,7 +473,7 @@ export default function QuizResultsPage() {
               correctCount={correctCount}
               totalQuestions={quiz.questions.length}
               showAnswers={showAnswers}
-              setShowAnswers={setShowAnswers}
+              setShowAnswers={handleShowAnswers}
               retakeQuiz={retakeQuiz}
               partialCount={partialCount}
             />
@@ -432,7 +481,7 @@ export default function QuizResultsPage() {
               loadingAnalysis={loadingAnalysis}
               analysisText={analysisText}
             />
-            {showAnswers && (
+            {showAnswers && user && (
               <DetailedReview
                 quizQuestions={quiz.questions}
                 selectedAnswers={selectedAnswers}
@@ -444,19 +493,30 @@ export default function QuizResultsPage() {
             )}
             <Recommendations actualScore={actualScore} quizTopic={quiz.topic} />
           </div>
-          {/* Right Sidebar - Quiz Performance Stats */}
-          <div className="lg:w-80">
-            <QuizPerformanceSidebar
-              loadingStats={loadingStats}
-              quizStats={quizStats}
-              actualScore={actualScore}
-              correctCount={correctCount}
-              totalQuestions={quiz.questions.length}
-              quizDifficulty={quiz.difficulty}
-            />
-          </div>
+          {/* Right Sidebar - Quiz Performance Stats - Only for authenticated users */}
+          {user && (
+            <div className="lg:w-80">
+              <QuizPerformanceSidebar
+                loadingStats={loadingStats}
+                quizStats={quizStats}
+                actualScore={actualScore}
+                correctCount={correctCount}
+                totalQuestions={quiz.questions.length}
+                quizDifficulty={quiz.difficulty}
+              />
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Guest Limit Modal */}
+      <GuestLimitModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        limitType="results"
+        title="Detailed Results Locked"
+        message="Login to view detailed quiz analysis, track your progress, and access personalized learning insights!"
+      />
     </div>
   );
 }

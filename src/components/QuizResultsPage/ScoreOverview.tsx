@@ -1,5 +1,6 @@
 import React from 'react';
-import { Trophy, CheckCircle, XCircle, Star, Eye, EyeOff, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Trophy, CheckCircle, XCircle, Star, Eye, EyeOff, RotateCcw, AlertTriangle, Lock } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface ScoreOverviewProps {
   actualScore: number;
@@ -34,6 +35,7 @@ export default function ScoreOverview({
   retakeQuiz,
   partialCount = 0
 }: ScoreOverviewProps) {
+  const { user } = useAuth();
   const incorrectCount = totalQuestions - correctCount - partialCount;
   
   return (
@@ -90,10 +92,11 @@ export default function ScoreOverview({
         <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4">
           <button
             onClick={() => setShowAnswers(!showAnswers)}
-            className="btn-primary flex items-center justify-center space-x-2"
+            className={`btn-primary flex items-center justify-center space-x-2 ${!user ? 'opacity-75' : ''}`}
           >
+            {!user && <Lock className="w-4 h-4" />}
             {showAnswers ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            <span>{showAnswers ? 'Hide' : 'Show'} Answers</span>
+            <span>{showAnswers ? 'Hide' : 'Show'} {user ? 'Answers' : 'Detailed Results'}</span>
           </button>
           <button
             onClick={retakeQuiz}
@@ -103,6 +106,12 @@ export default function ScoreOverview({
             <span>Retake Quiz</span>
           </button>
         </div>
+        
+        {!user && (
+          <p className="text-sm text-gray-600 mt-4">
+            Login to view detailed explanations and track your progress over time
+          </p>
+        )}
       </div>
     </div>
   );
