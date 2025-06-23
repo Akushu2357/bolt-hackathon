@@ -481,18 +481,18 @@ export default function QuizPage() {
                 renderInput={renderQuestionInput}
               />
               {/* Navigation */}
-              <div className="flex flex-col sm:flex-row justify-between space-y-3 sm:space-y-0 sm:space-x-4">
+              <div className="flex flex-col sm:flex-row justify-between space-y-3 sm:space-y-0 sm:space-x-4 gap-2">
                 <button
                   onClick={() => setCurrentQuestionIndex(Math.max(0, currentQuestionIndex - 1))}
                   disabled={currentQuestionIndex === 0}
-                  className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed order-2 sm:order-1"
+                  className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed order-2 sm:order-1 w-full"
                 >
                   Previous
                 </button>
                 <button
                   onClick={nextQuestion}
                   disabled={!isAnswerSelected()}
-                  className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed order-1 sm:order-2"
+                  className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed order-1 sm:order-2 w-full"
                 >
                   {currentQuestionIndex === currentQuiz.questions.length - 1 ? 'Finish' : 'Next'}
                 </button>
