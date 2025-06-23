@@ -35,7 +35,7 @@ interface Question {
   question: string;
   options?: string[];
   explanation: string;
-  correct_answer: number[] | string | boolean;
+  correct_answer: number[] | number | string | boolean;
 }
 
 interface Quiz {
@@ -208,11 +208,6 @@ export default function QuizPage() {
           GuestLimitService.incrementUsage('quiz');
         } catch (error) {
           console.error('Error generating quiz for guest, falling back to mock:', error);
-          
-
-          const updatedGuestQuizzes = [mockQuiz, ...guestQuizzes];
-          setGuestQuizzes(updatedGuestQuizzes);
-          saveGuestQuizzes(updatedGuestQuizzes);
           
           // Increment guest usage
           GuestLimitService.incrementUsage('quiz');
