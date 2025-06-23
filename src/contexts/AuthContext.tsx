@@ -32,6 +32,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+    }).catch(async (error) => {
+      console.error('Error getting session:', error);
+      // Clear any invalid session data
+      await supabase.auth.signOut();
+      setUser(null);
+      setSession(null);
+      setLoading(false);
     });
 
     // Listen for auth changes
@@ -41,9 +48,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user ?? null);
         setLoading(false);
 
-        // Create profile on sign up
-        if (event === 'SIGNED_UP' && session?.user) {
-          await createProfile(session.user);
+        // Create profile on sign up (event SIGNED_IN)
+        if (event === 'SIGNED_IN' && session?.user) {
+          // Check if profile exists
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .maybeSingle();
+
+          if (error && error.code !== 'PGRST116') {
+            console.error('Error checking profile:', error);
+          } else if (!profile) {
+            // Profile doesn't exist, create it
+            await createProfile(session.user);
+          }
         }
       }
     );
@@ -92,7 +111,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    console.log('Signing out');
     await supabase.auth.signOut();
+    console.log('Signed out');
+    setUser(null);
+    setSession(null);
   };
 
   const value = {
