@@ -64,6 +64,9 @@ export default function GuestLimitModal({
     }
   };
 
+  // Get usage summary once so it's available in JSX
+  const usage = GuestLimitService.getUsageSummary();
+
   const content = {
     title: title || getDefaultContent().title,
     message: message || getDefaultContent().message,
