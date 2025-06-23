@@ -28,6 +28,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingSessions, setLoadingSessions] = useState(true);
   const [showSidebar, setShowSidebar] = useState(false);
   const [guestMessages, setGuestMessages] = useState<Message[]>([]);
   const [showLimitModal, setShowLimitModal] = useState(false);
@@ -59,13 +60,10 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (currentSession) {
-      setMessages(currentSession.messages);
-      // Mark messages as read when switching to a session
-      markSessionAsRead(currentSession.id);
+      fetchMessages(currentSession.id);
     }
   }, [currentSession]);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     scrollToBottom();
   }, [messages, guestMessages]);
@@ -74,31 +72,40 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const markSessionAsRead = (sessionId: string) => {
-    setSessions(prevSessions => 
-      prevSessions.map(session => 
-        session.id === sessionId 
-          ? { ...session, unreadCount: 0 }
-          : session
-      )
-    );
+  const fetchSessions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('chat_sessions')
+        .select('*')
+        .eq('user_id', user!.id)
+        .order('updated_at', { ascending: false });
+
+      if (error) throw error;
+      setSessions(data || []);
+      
+      if (data && data.length > 0) {
+        setCurrentSession(data[0]);
+      }
+    } catch (error) {
+      console.error('Error fetching sessions:', error);
+    } finally {
+      setLoadingSessions(false);
+    }
   };
 
-  const createNewSession = () => {
-    const newSession: MockChatSession = {
-      id: `new-${Date.now()}`,
-      title: 'New Chat Session',
-      lastMessage: '',
-      timestamp: new Date().toISOString(),
-      unreadCount: 0,
-      isOnline: true,
-      messages: []
-    };
-    
-    setSessions([newSession, ...sessions]);
-    setCurrentSession(newSession);
-    setMessages([]);
-    setShowSidebar(false);
+  const fetchMessages = async (sessionId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      setMessages(data || []);
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+    }
   };
 
   const createNewSession = async () => {
@@ -147,10 +154,9 @@ export default function ChatPage() {
         setCurrentSession(updatedSessions[0] || null);
         setMessages([]);
       }
+    } catch (error) {
+      console.error('Error deleting session:', error);
     }
-    
-    setShowDeleteConfirm(null);
-    setActiveDropdown(null);
   };
 
   const sendMessage = async () => {
@@ -251,7 +257,21 @@ export default function ChatPage() {
       console.error('Error sending message:', error);
     } finally {
       setLoading(false);
-    }, 1500);
+    }
+  };
+
+  const generateAIResponse = async (message: string): Promise<string> => {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    const responses = [
+      `Great question! Let me help you understand this concept better. ${message.toLowerCase().includes('math') ? 'Mathematics is all about patterns and logical thinking.' : 'This is an interesting topic to explore.'}`,
+      `I'd be happy to explain that! Let's break this down step by step to make it easier to understand.`,
+      `That's a thoughtful question. Here's how I would approach this problem...`,
+      `Excellent! This is a fundamental concept. Let me provide you with a clear explanation and some examples.`,
+      `I can see you're thinking deeply about this. Let me guide you through the solution process.`
+    ];
+    
+    return responses[Math.floor(Math.random() * responses.length)];
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -350,43 +370,10 @@ export default function ChatPage() {
             </div>
           )}
 
-          {/* Delete Confirmation Modal */}
-          {showDeleteConfirm && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-                <div className="flex items-center mb-4">
-                  <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mr-3">
-                    <Trash2 className="w-5 h-5 text-red-600" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-900">Delete Chat</h3>
-                </div>
-                
-                <p className="text-gray-600 mb-6">
-                  Are you sure you want to delete this chat session? This action cannot be undone and all messages will be permanently removed.
-                </p>
-                
-                <div className="flex space-x-3">
-                  <button
-                    onClick={() => deleteSession(showDeleteConfirm)}
-                    className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
-                  >
-                    Delete
-                  </button>
-                  <button
-                    onClick={() => setShowDeleteConfirm(null)}
-                    className="flex-1 btn-secondary"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Overlay for mobile */}
           {showSidebar && (
             <div 
-              className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-30" 
+              className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40" 
               onClick={() => setShowSidebar(false)}
             ></div>
           )}
