@@ -20,35 +20,7 @@ import { QuizDataService } from '../services/quizDataService';
 import { QuizScoringService } from '../services/quizScoringService';
 import { LearningProgressService } from '../services/learningProgressService';
 import { GuestLimitService } from '../services/guestLimitService';
-
-interface Question {
-  id: string;
-  type: 'single' | 'multiple' | 'true_false' | 'open_ended';
-  question: string;
-  options?: string[];
-  explanation: string;
-  correct_answer: number[] | string | boolean;
-}
-
-interface Quiz {
-  id: string;
-  title: string;
-  topic: string;
-  difficulty: 'easy' | 'medium' | 'hard';
-  questions: Question[];
-  created_at: string;
-}
-
-interface QuizAttempt {
-  id: string;
-  quiz_id: string;
-  score: number;
-  completed_at: string;
-  quiz: {
-    title: string;
-    topic: string;
-  };
-}
+import { Question, Quiz, QuizAttempt } from '../types';
 
 export default function QuizPage() {
   const { user } = useAuth();
