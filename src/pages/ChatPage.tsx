@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Send, Bot, User, Plus, MessageCircle, Trash2, Menu, X, LogIn } from 'lucide-react';
+import { Send, Bot, User, Plus, MessageCircle, Trash2, Menu, X, LogIn, ChevronRight, ChevronLeft } from 'lucide-react';
 import GuestLimitModal from '../components/common/GuestLimitModal';
 import { GuestLimitService } from '../services/guestLimitService';
 
@@ -307,12 +307,12 @@ export default function ChatPage() {
               <div className="p-4 border-b border-gray-200">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold text-gray-900">Chats</h2>
-                  <button
+                  {/* <button
                     onClick={() => setShowSidebar(false)}
                     className="lg:hidden p-1 hover:bg-gray-100 rounded"
                   >
                     <X className="w-5 h-5" />
-                  </button>
+                  </button> */}
                 </div>
                 <button
                   onClick={createNewSession}
@@ -378,6 +378,23 @@ export default function ChatPage() {
             ></div>
           )}
 
+          {/* Sidebar Toggle Button (left side) */}
+          {user && (
+            <button
+              onClick={() => setShowSidebar(!showSidebar)}
+              className={`lg:hidden fixed top-1/3 z-40 bg-white border border-gray-200 rounded-r-lg shadow-md pt-7 pe-1 pb-7 transition-transform duration-300 ${
+                showSidebar ? 'translate-x-80' : 'translate-x-0'
+              }`}
+              style={{ left: 0 }}
+            >
+              {showSidebar ? (
+                <ChevronLeft className="w-5 h-5 text-gray-600" />
+              ) : (
+                <ChevronRight className="w-5 h-5 text-gray-600" />
+              )}
+            </button>
+          )}
+
           {/* Chat Area */}
           <div className="flex-1 flex flex-col min-w-0">
             {/* Chat Header */}
@@ -388,14 +405,6 @@ export default function ChatPage() {
                   {user ? (currentSession?.title || 'AI Tutor Chat') : 'AI Tutor Chat (Guest Mode)'}
                 </h3>
 
-                {user && (
-                  <button
-                    onClick={() => setShowSidebar(true)}
-                    className="lg:hidden mr-2 p-1 hover:bg-gray-100 rounded"
-                  >
-                    <Menu className="w-5 h-5 text-gray-600" />
-                  </button>
-                )}
               </div>
             </div>
 
