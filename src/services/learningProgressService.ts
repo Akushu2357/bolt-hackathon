@@ -1,23 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { GradingService, GradedQuestion } from './gradingService';
-
-interface Question {
-  id: string;
-  question: string;
-  options?: string[];
-  correct_answer: number | number[] | boolean | string;
-  type: 'single' | 'multiple' | 'true_false' | 'open_ended';
-  explanation: string;
-}
-
-interface Quiz {
-  id: string;
-  title: string;
-  topic: string;
-  difficulty: 'easy' | 'medium' | 'hard';
-  questions: Question[];
-  created_at: string;
-}
+import { Question, Quiz } from '../types';
 
 export class LearningProgressService {
   static async updateLearningProgress(

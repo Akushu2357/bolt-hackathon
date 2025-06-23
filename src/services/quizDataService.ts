@@ -1,34 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { User } from '@supabase/supabase-js';
-
-interface Question {
-  id: string;
-  question: string;
-  options?: string[];
-  correct_answer: number | number[] | boolean | string;
-  type: 'single' | 'multiple' | 'true_false' | 'open_ended';
-  explanation: string;
-}
-
-interface Quiz {
-  id: string;
-  title: string;
-  topic: string;
-  difficulty: 'easy' | 'medium' | 'hard';
-  questions: Question[];
-  created_at: string;
-}
-
-interface QuizAttempt {
-  id: string;
-  quiz_id: string;
-  score: number;
-  completed_at: string;
-  quiz: {
-    title: string;
-    topic: string;
-  };
-}
+import { Question, Quiz, QuizAttempt } from '../types';
 
 export class QuizDataService {
   static async fetchQuizzes(user: User): Promise<Quiz[]> {
