@@ -60,7 +60,7 @@ export class QuizScoringService {
         case 'single':
         default: {
           // Single choice: always compare indices
-          let correctIndex: number | undefined = undefined;
+          let isCorrect = false;
           if (Array.isArray(correctAnswer)) {
             // If correct_answer is an array, check if user's answer matches any of them
             // For single choice, userAnswer should be an array with one element
@@ -79,6 +79,9 @@ export class QuizScoringService {
               const correctIndex = question.options.indexOf(correctAnswer);
               isCorrect = userAnswer[0] === correctIndex;
             }
+          }
+          if (isCorrect) {
+            correct++;
           }
           break;
         }
@@ -116,7 +119,7 @@ export class QuizScoringService {
     gradingResults?: GradedQuestion[]
   ): boolean {
     const correctAnswer = question.correct_answer;
-    
+
     switch (question.type) {
       case 'multiple': {
         // Compare arrays by value, not reference
@@ -124,15 +127,15 @@ export class QuizScoringService {
         const correctAnswerArray = Array.isArray(correctAnswer) ? [...correctAnswer].sort() : [];
         return userAnswerArray.length === correctAnswerArray.length && userAnswerArray.every((v, i) => v === correctAnswerArray[i]);
       }
-        
+
       case 'true_false':
         return userAnswer === correctAnswer;
-        
+
       case 'open_ended':
         // For open-ended questions, we need to find the grading result by position
         // This is handled in the component level now
         return false; // Default to false, actual grading is handled elsewhere
-        
+
       case 'single':
       default: {
         // Single choice: always compare indices
@@ -156,6 +159,7 @@ export class QuizScoringService {
           }
         }
         return false;
+      }
     }
   }
 
