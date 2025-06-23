@@ -1,19 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { 
   Plus, 
-  Play, 
-  Clock, 
   CheckCircle, 
-  XCircle, 
-  Trophy,
   BookOpen,
-  Target,
-  RotateCcw,
   Menu,
-  X,
   LogIn,
   Lock
 } from 'lucide-react';
@@ -28,35 +20,7 @@ import { QuizDataService } from '../services/quizDataService';
 import { QuizScoringService } from '../services/quizScoringService';
 import { LearningProgressService } from '../services/learningProgressService';
 import { GuestLimitService } from '../services/guestLimitService';
-
-interface Question {
-  id: string;
-  type: 'single' | 'multiple' | 'true_false' | 'open_ended';
-  question: string;
-  options?: string[];
-  explanation: string;
-  correct_answer: number[] | number | string | boolean;
-}
-
-interface Quiz {
-  id: string;
-  title: string;
-  topic: string;
-  difficulty: 'easy' | 'medium' | 'hard';
-  questions: Question[];
-  created_at: string;
-}
-
-interface QuizAttempt {
-  id: string;
-  quiz_id: string;
-  score: number;
-  completed_at: string;
-  quiz: {
-    title: string;
-    topic: string;
-  };
-}
+import { Question, Quiz, QuizAttempt } from '../types';
 
 export default function QuizPage() {
   const { user } = useAuth();
@@ -208,9 +172,7 @@ export default function QuizPage() {
           GuestLimitService.incrementUsage('quiz');
         } catch (error) {
           console.error('Error generating quiz for guest, falling back to mock:', error);
-          
-          // Increment guest usage
-          GuestLimitService.incrementUsage('quiz');
+
         }
       }
 
