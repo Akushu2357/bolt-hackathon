@@ -71,59 +71,51 @@ export class ChatApiService {
   /**
    * Send message to OpenAI API
    */
-  private static async sendToOpenAI(
-    message: string,
-    context?: string[]
-  ): Promise<ChatMessage> {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
-        messages: [
-          {
-            role: 'system',
-            content: `You are TutorAI, a helpful educational assistant. You help students learn by providing clear explanations, examples, and guidance. 
-            ${context ? `Previous context: ${context.join(' ')}` : ''}
-            
-            Available commands:
-            - /create-quiz [topic] [difficulty] - Generate a quiz on the specified topic
-            - /quiz [topic] - Generate a quiz with default settings
-            
-            If a user asks about creating quizzes, mention these commands.`
-          },
-          {
-            role: 'user',
-            content: message
-          }
-        ],
-        max_tokens: 500,
-        temperature: 0.7,
-      }),
-    });
+private static async sendToGroq(
+  message: string,
+  context?: string[]
+): Promise<ChatMessage> {
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`, // เพิ่มใน .env
+    },
+    body: JSON.stringify({
+      model: 'llama3-8b-8192', // หรือ llama3-70b-8192 ก็ได้
+      messages: [
+        {
+          role: 'system',
+          content: `You are TutorAI, a helpful educational assistant. ${
+            context ? `Previous context: ${context.join(' ')}` : ''
+          }`
+        },
+        {
+          role: 'user',
+          content: message
+        }
+      ],
+      max_tokens: 500,
+      temperature: 0.7,
+    }),
+  });
 
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    const assistantMessage = data.choices[0]?.message?.content;
-
-    if (!assistantMessage) {
-      throw new Error('No response from OpenAI API');
-    }
-
-    return {
-      id: `msg_${Date.now()}`,
-      role: 'assistant',
-      content: assistantMessage,
-      timestamp: new Date().toISOString(),
-      type: 'text'
-    };
+  if (!response.ok) {
+    throw new Error(`Groq API error: ${response.statusText}`);
   }
+
+  const data = await response.json();
+  const assistantMessage = data.choices[0]?.message?.content;
+
+  return {
+    id: `msg_${Date.now()}`,
+    role: 'assistant',
+    content: assistantMessage,
+    timestamp: new Date().toISOString(),
+    type: 'text'
+  };
+}
+
 
   /**
    * Fallback mock API for development/demo
