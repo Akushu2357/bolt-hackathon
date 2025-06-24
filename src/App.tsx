@@ -9,6 +9,7 @@ import ChatPage from './pages/ChatPage';
 import QuizPage from './pages/QuizPage';
 import QuizResultsPage from './pages/QuizResultsPage';
 import ProfilePage from './pages/ProfilePage';
+import LearningDashboardPage from './pages/LearningDashboardPage';
 import LoadingSpinner from './components/QuizResultsPage/LoadingSpinner';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -97,6 +98,15 @@ function AppRoutes() {
             <QuizResultsPage />
           </Layout>
         </GuestOrAuthRoute>
+      } />
+      
+      {/* Learning Dashboard - only for authenticated users */}
+      <Route path="/learning" element={
+        <ProtectedRoute>
+          <Layout>
+            <LearningDashboardPage />
+          </Layout>
+        </ProtectedRoute>
       } />
       
       {/* Profile page - only for authenticated users */}
