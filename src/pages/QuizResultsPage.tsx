@@ -481,6 +481,25 @@ export default function QuizResultsPage() {
               loadingAnalysis={loadingAnalysis}
               analysisText={analysisText}
             />
+            
+            {/*== Atom try to test smth here ==*/}
+            <button
+              className="btn-primary mt-4"
+              onClick={() =>
+                navigate('/chat', {
+                  state: {
+                    weakAreas: gradingResults 
+                      ? GradingService.extractWeakAreasFromGrading(gradingResults)
+                      : [],
+                    fromQuiz: true
+                  }
+                })
+              }
+            >
+              Ask TutorAI about your weaknesses
+            </button>
+            {/*== Atom try to test smth here ==*/}
+            
             {showAnswers && user && (
               <DetailedReview
                 quizQuestions={quiz.questions}
