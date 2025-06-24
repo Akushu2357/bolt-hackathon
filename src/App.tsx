@@ -80,6 +80,15 @@ function AppRoutes() {
           </Layout>
         </GuestOrAuthRoute>
       } />
+
+      <Route path="/chat/:sessionId" element={
+        <GuestOrAuthRoute>
+          <Layout>
+            <ChatPage />
+          </Layout>
+        </GuestOrAuthRoute>
+      } />
+
       
       {/* Quiz page - accessible to both guest and authenticated users */}
       <Route path="/quiz" element={
