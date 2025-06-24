@@ -7,6 +7,8 @@ export * from './table_quizzes';
 export * from './table_quiz_attempts';
 export * from './table_learning_progress';
 export * from './table_schedule';
+export * from './table_weaknesses';
+export * from './table_learning_path';
 
 // Canonical Question and Quiz interfaces
 export interface Question {

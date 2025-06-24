@@ -5,6 +5,8 @@ import { QuizTable } from './table_quizzes';
 import { QuizAttemptTable } from './table_quiz_attempts';
 import { LearningProgressTable } from './table_learning_progress';
 import { ScheduleTable } from './table_schedule';
+import { WeaknessTable } from './table_weaknesses';
+import { LearningPathTable } from './table_learning_path';
 
 export type Database = {
   public: {
@@ -16,6 +18,8 @@ export type Database = {
       quiz_attempts: QuizAttemptTable;
       learning_progress: LearningProgressTable;
       schedule: ScheduleTable;
+      weaknesses: WeaknessTable;
+      learning_path: LearningPathTable;
     };
   };
 };
