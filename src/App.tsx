@@ -89,7 +89,6 @@ function AppRoutes() {
         </GuestOrAuthRoute>
       } />
 
-      
       {/* Quiz page - accessible to both guest and authenticated users */}
       <Route path="/quiz" element={
         <GuestOrAuthRoute>
