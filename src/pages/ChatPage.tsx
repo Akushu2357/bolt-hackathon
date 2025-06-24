@@ -42,29 +42,42 @@ export default function ChatPage() {
       setLoadingSessions(false);
     }
   }, [user]);
-
-  // Handle initial message from URL params (for logged-out users)
+  
+  {/*== Atom tryin to test smth here. ==*/}
+  const { state } = useLocation() as { state?: { weakAreas?: string[]; fromQuiz?: boolean } };
+  
+  // Handle initial message from URL params (for logged-out users) or weak areas from quiz
   useEffect(() => {
     const urlParams = new URLSearchParams(location.search);
     const initialMessage = urlParams.get('message');
-    
+  
+    // ถ้ามี initialMessage และยังไม่ล็อกอิน → ใช้ข้อความจาก URL
     if (initialMessage && !user) {
-      // For guest users, add the initial message
       const userMessage: ChatMessage = {
         id: `initial_${Date.now()}`,
         role: 'user',
         content: initialMessage,
         timestamp: new Date().toISOString(),
-        type: 'text'
+        type: 'text',
       };
-      
       setMessages([userMessage]);
-      
-      // Clear the URL parameter
       navigate('/chat', { replace: true });
+      return; // จบที่นี่ไม่ไปประมวลผล state ต่อ
     }
-  }, [location.search, navigate, user, setMessages]);
-
+  
+    // ถ้ามาจากหน้าควิซและมี weakAreas → แสดงข้อความถาม TutorAI
+    if (state?.fromQuiz && state.weakAreas?.length > 0) {
+      const userMessage: ChatMessage = {
+        id: `quiz_weak_${Date.now()}`,
+        role: 'user',
+        content: `Hi TutorAI, can you help me understand these weak areas from my recent quiz? ${state.weakAreas.join(', ')}`,
+        timestamp: new Date().toISOString(),
+        type: 'text',
+      };
+      setMessages([userMessage]);
+    }
+  }, [location.search, navigate, user, state, setMessages]);
+  
   const fetchSessions = async () => {
     if (!user) return;
 
