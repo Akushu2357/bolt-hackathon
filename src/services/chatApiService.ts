@@ -57,10 +57,10 @@ export class ChatApiService {
       }
 
       // For regular chat messages, use OpenAI API or fallback to mock
-      if (this.OPENAI_API_KEY) {
+      if (import.meta.env.VITE_GROQ_API_KEY) {
+        return await this.sendToGroq(message, context);
+      } else if (this.OPENAI_API_KEY) {
         return await this.sendToOpenAI(message, context);
-      } else {
-        return await this.sendToMockAPI(message);
       }
     } catch (error) {
       console.error('Error sending message:', error);
