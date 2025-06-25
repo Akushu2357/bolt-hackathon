@@ -253,7 +253,7 @@ export default function ChatPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
-        <div className="flex h-[calc(100vh-8rem)] sm:h-[calc(100vh-12rem)] bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+<div className="flex h-full max-h-[calc(100vh-8rem)] sm:max-h-[calc(100vh-12rem)] bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           
           {/* Sidebar - Only show for logged-in users */}
           {user && (
