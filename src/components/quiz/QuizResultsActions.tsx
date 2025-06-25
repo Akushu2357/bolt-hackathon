@@ -56,23 +56,31 @@ export default function QuizResultsActions({
 
   return (
     <div className="space-y-6">
-      {/* Main Actions */}
-      <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4">
-        <button
-          onClick={handleDiscussWithAI}
-          className="btn-primary flex items-center justify-center space-x-2"
-        >
-          <MessageCircle className="w-4 h-4" />
-          <span>Discuss with AI Tutor</span>
-        </button>
-        <button
-          onClick={onRetakeQuiz}
-          className="btn-secondary flex items-center justify-center space-x-2"
-        >
-          <RotateCcw className="w-4 h-4" />
-          <span>Retake Quiz</span>
-        </button>
+      {/* Performance Analysis + Action Buttons */}
+      <div className="bg-gradient-to-br from-blue-50 via-white to-indigo-50 rounded-xl border border-blue-200 p-6 space-y-4">
+        <PerformanceAnalysis
+          loadingAnalysis={loadingAnalysis}
+          analysisText={analysisText}
+        />
+      
+        <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4">
+          <button
+            onClick={handleDiscussWithAI}
+            className="btn-primary flex items-center justify-center space-x-2"
+          >
+            <MessageCircle className="w-4 h-4" />
+            <span>Discuss with AI Tutor</span>
+          </button>
+          <button
+            onClick={onRetakeQuiz}
+            className="btn-secondary flex items-center justify-center space-x-2"
+          >
+            <RotateCcw className="w-4 h-4" />
+            <span>Retake Quiz</span>
+          </button>
+        </div>
       </div>
+
     </div>
   );
 }
