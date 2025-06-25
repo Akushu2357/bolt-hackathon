@@ -103,7 +103,7 @@ export default function ScoreOverview({
             className="btn-secondary flex items-center justify-center space-x-2"
           >
             <RotateCcw className="w-4 h-4" />
-            <span>Retake Quiz Jaa</span>
+            <span>Retake Quiz</span>
           </button>
 
           {/*เพิ่มตรงนี้*/}
