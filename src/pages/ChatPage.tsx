@@ -346,7 +346,7 @@ export default function ChatPage() {
           )}
 
           {/* Chat Area */}
-          <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 flex flex-col overflow-y-auto">
             {sessionError ? (
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center">
