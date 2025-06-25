@@ -487,6 +487,8 @@ export default function QuizResultsPage() {
               setShowAnswers={handleShowAnswers}
               retakeQuiz={retakeQuiz}
               partialCount={partialCount}
+              quizContext={quizContext}        // ต้องมีตัวแปรนี้อยู่แล้วใน Parent
+              showChatIntegration={true}       // ถ้าอยากแสดงปุ่ม Discuss
             />
             
             <PerformanceAnalysis
