@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { ChatApiService, ChatMessage } from '../../services/chatApiService';
 import { GuestLimitService } from '../../services/guestLimitService';
+import { QuizChatContext } from '../../services/quizChatIntegrationService';
 import GuestLimitModal from '../common/GuestLimitModal';
 
 interface RealTimeChatComponentProps {
@@ -21,13 +22,15 @@ interface RealTimeChatComponentProps {
   initialMessages?: ChatMessage[];
   onMessageSent?: (message: ChatMessage) => void;
   onQuizGenerated?: (quizId: string) => void;
+  quizContext?: QuizChatContext | null;
 }
 
 export default function RealTimeChatComponent({
   sessionId,
   initialMessages = [],
   onMessageSent,
-  onQuizGenerated
+  onQuizGenerated,
+  quizContext
 }: RealTimeChatComponentProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -49,6 +52,11 @@ export default function RealTimeChatComponent({
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  // Update messages when initialMessages change
+  useEffect(() => {
+    setMessages(initialMessages);
+  }, [initialMessages]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -105,6 +113,11 @@ export default function RealTimeChatComponent({
         .slice(-5)
         .filter(msg => !msg.metadata?.isTyping)
         .map(msg => `${msg.role}: ${msg.content}`);
+
+      // Add quiz context to the conversation if available
+      if (quizContext) {
+        context.unshift(`Quiz context: User completed a ${quizContext.topic} quiz (${quizContext.difficulty} difficulty) with ${quizContext.score}% score. Weak areas: ${quizContext.weakAreas.join(', ')}`);
+      }
 
       // Send message to API
       const assistantMessage = await ChatApiService.sendMessage(
@@ -173,6 +186,11 @@ export default function RealTimeChatComponent({
   const insertCommand = (command: string) => {
     setInputMessage(command);
     setShowCommands(false);
+    inputRef.current?.focus();
+  };
+
+  const insertQuizPrompt = (prompt: string) => {
+    setInputMessage(prompt);
     inputRef.current?.focus();
   };
 
@@ -258,6 +276,35 @@ export default function RealTimeChatComponent({
   const canSendMessage = user || GuestLimitService.canPerformAction('chat');
   const guestUsage = GuestLimitService.getUsageSummary();
 
+  // Generate quiz-specific welcome message
+  const getWelcomeMessage = () => {
+    if (quizContext) {
+      return {
+        title: `Quiz Discussion: ${quizContext.quizTitle}`,
+        subtitle: `Let's discuss your ${quizContext.score}% performance and improve your understanding of ${quizContext.topic}`,
+        suggestions: [
+          `Explain the concepts I missed in my ${quizContext.topic} quiz`,
+          `Help me understand my weak areas: ${quizContext.weakAreas.slice(0, 2).join(', ')}`,
+          `Give me practice questions for ${quizContext.topic}`,
+          `Create a study plan for improving in ${quizContext.topic}`
+        ]
+      };
+    }
+
+    return {
+      title: 'Welcome to TutorAI Chat!',
+      subtitle: 'What would you like to learn about today?',
+      suggestions: [
+        '/create-quiz mathematics medium',
+        'Explain photosynthesis',
+        'Help me with calculus',
+        'Generate a science quiz'
+      ]
+    };
+  };
+
+  const welcomeContent = getWelcomeMessage();
+
   return (
     <div className="flex flex-col h-full bg-white">
       {/* Header */}
@@ -268,7 +315,7 @@ export default function RealTimeChatComponent({
           </div>
           <div>
             <h3 className="font-semibold text-gray-900">
-              TutorAI Chat
+              {quizContext ? `Quiz Discussion` : 'TutorAI Chat'}
             </h3>
             <p className="text-sm text-gray-600">
               {user ? 'Unlimited access' : `${guestUsage.chats.remaining} messages left`}
@@ -331,25 +378,28 @@ export default function RealTimeChatComponent({
           <div className="text-center py-12">
             <Bot className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Welcome to TutorAI Chat!
+              {welcomeContent.title}
             </h3>
             <p className="text-gray-600 mb-4">
-              Ask me anything or use commands to generate quizzes
+              {welcomeContent.subtitle}
             </p>
             <div className="flex flex-wrap justify-center gap-2">
-              <button
-                onClick={() => insertCommand('/create-quiz mathematics medium')}
-                className="px-4 py-2 bg-primary-100 hover:bg-primary-200 text-primary-700 rounded-lg text-sm transition-colors duration-200"
-              >
-                <Zap className="w-4 h-4 inline mr-1" />
-                Generate Math Quiz
-              </button>
-              <button
-                onClick={() => setInputMessage('Explain photosynthesis')}
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm transition-colors duration-200"
-              >
-                Ask about Science
-              </button>
+              {welcomeContent.suggestions.map((suggestion, index) => (
+                <button
+                  key={index}
+                  onClick={() => insertQuizPrompt(suggestion)}
+                  className="px-4 py-2 bg-primary-100 hover:bg-primary-200 text-primary-700 rounded-lg text-sm transition-colors duration-200"
+                >
+                  {suggestion.startsWith('/') ? (
+                    <>
+                      <Zap className="w-4 h-4 inline mr-1" />
+                      {suggestion}
+                    </>
+                  ) : (
+                    suggestion
+                  )}
+                </button>
+              ))}
             </div>
           </div>
         ) : (
@@ -380,7 +430,10 @@ export default function RealTimeChatComponent({
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Ask me anything or type /create-quiz to generate a quiz..."
+                placeholder={quizContext 
+                  ? `Ask about your ${quizContext.topic} quiz or any related concepts...`
+                  : "Ask me anything or type /create-quiz to generate a quiz..."
+                }
                 className="w-full resize-none input-field text-sm"
                 rows={1}
                 disabled={isLoading}
