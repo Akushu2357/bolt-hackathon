@@ -4,8 +4,11 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Plus, MessageCircle, Trash2, ChevronRight, ChevronLeft, Sparkles } from 'lucide-react';
 import RealTimeChatComponent from '../components/chat/RealTimeChatComponent';
+import QuizContextBanner from '../components/chat/QuizContextBanner';
+import QuizSuggestedPrompts from '../components/chat/QuizSuggestedPrompts';
 import { useChatSession } from '../hooks/useChatSession';
 import { ChatMessage } from '../services/chatApiService';
+import { QuizChatIntegrationService, QuizChatContext } from '../services/quizChatIntegrationService';
 
 interface ChatSession {
   id: string;
@@ -23,6 +26,8 @@ export default function ChatPage() {
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [showSidebar, setShowSidebar] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>(sessionId);
+  const [quizContext, setQuizContext] = useState<QuizChatContext | null>(null);
+  const [showQuizBanner, setShowQuizBanner] = useState(false);
 
   const {
     currentSession,
@@ -42,16 +47,67 @@ export default function ChatPage() {
       setLoadingSessions(false);
     }
   }, [user]);
-  
-  {/*== Atom tryin to test smth here. ==*/}
-  const { state } = useLocation() as { state?: { weakAreas?: string[]; fromQuiz?: boolean } };
-  
-  // Handle initial message from URL params (for logged-out users) or weak areas from quiz
+
+  // Handle quiz integration from location state or stored context
   useEffect(() => {
+    const { state } = location as { state?: any };
+    
+    // Check for quiz context from navigation state
+    if (state?.fromQuiz && state?.quizContext) {
+      setQuizContext(state.quizContext);
+      setShowQuizBanner(true);
+      
+      // If there's an initial message, set it
+      if (state.initialMessage) {
+        const userMessage: ChatMessage = {
+          id: `quiz_initial_${Date.now()}`,
+          role: 'user',
+          content: state.initialMessage,
+          timestamp: new Date().toISOString(),
+          type: 'text',
+        };
+        setMessages([userMessage]);
+      } else {
+        // Create default initial message
+        const initialMessage = QuizChatIntegrationService.createInitialChatMessage(state.quizContext);
+        const userMessage: ChatMessage = {
+          id: `quiz_auto_${Date.now()}`,
+          role: 'user',
+          content: initialMessage,
+          timestamp: new Date().toISOString(),
+          type: 'text',
+        };
+        setMessages([userMessage]);
+      }
+      
+      // Clear navigation state
+      navigate(location.pathname, { replace: true });
+      return;
+    }
+    
+    // Check for stored quiz context
+    const storedContext = QuizChatIntegrationService.getAndClearQuizContext();
+    if (storedContext) {
+      setQuizContext(storedContext);
+      setShowQuizBanner(true);
+      
+      // Create initial message
+      const initialMessage = QuizChatIntegrationService.createInitialChatMessage(storedContext);
+      const userMessage: ChatMessage = {
+        id: `quiz_stored_${Date.now()}`,
+        role: 'user',
+        content: initialMessage,
+        timestamp: new Date().toISOString(),
+        type: 'text',
+      };
+      setMessages([userMessage]);
+      return;
+    }
+
+    // Handle regular initial message from URL params (for logged-out users)
     const urlParams = new URLSearchParams(location.search);
     const initialMessage = urlParams.get('message');
-  
-    // ถ้ามี initialMessage และยังไม่ล็อกอิน → ใช้ข้อความจาก URL
+    
     if (initialMessage && !user) {
       const userMessage: ChatMessage = {
         id: `initial_${Date.now()}`,
@@ -62,21 +118,8 @@ export default function ChatPage() {
       };
       setMessages([userMessage]);
       navigate('/chat', { replace: true });
-      return; // จบที่นี่ไม่ไปประมวลผล state ต่อ
     }
-  
-    // ถ้ามาจากหน้าควิซและมี weakAreas → แสดงข้อความถาม TutorAI
-    if (state?.fromQuiz && state.weakAreas?.length > 0) {
-      const userMessage: ChatMessage = {
-        id: `quiz_weak_${Date.now()}`,
-        role: 'user',
-        content: `Hi TutorAI, can you help me understand these weak areas from my recent quiz? ${state.weakAreas.join(', ')}`,
-        timestamp: new Date().toISOString(),
-        type: 'text',
-      };
-      setMessages([userMessage]);
-    }
-  }, [location.search, navigate, user, state, setMessages]);
+  }, [location, navigate, user, setMessages]);
   
   const fetchSessions = async () => {
     if (!user) return;
@@ -110,6 +153,9 @@ export default function ChatPage() {
       setActiveSessionId(newSession.id);
       navigate(`/chat/${newSession.id}`);
       setShowSidebar(false);
+      // Clear quiz context when starting new session
+      setQuizContext(null);
+      setShowQuizBanner(false);
     }
   };
 
@@ -117,6 +163,9 @@ export default function ChatPage() {
     setActiveSessionId(session.id);
     navigate(`/chat/${session.id}`);
     setShowSidebar(false);
+    // Clear quiz context when switching sessions
+    setQuizContext(null);
+    setShowQuizBanner(false);
   };
 
   const handleDeleteSession = async (sessionId: string) => {
@@ -178,6 +227,16 @@ export default function ChatPage() {
         startQuizId: quizId 
       } 
     });
+  };
+
+  const handlePromptSelect = (prompt: string) => {
+    // This will be handled by the RealTimeChatComponent
+    // We can pass this down as a prop if needed
+  };
+
+  const handleDismissQuizBanner = () => {
+    setShowQuizBanner(false);
+    setQuizContext(null);
   };
 
   if (loadingSessions || sessionLoading) {
@@ -307,12 +366,38 @@ export default function ChatPage() {
                 </div>
               </div>
             ) : (
-              <RealTimeChatComponent
-                sessionId={activeSessionId || 'guest'}
-                initialMessages={messages}
-                onMessageSent={handleMessageSent}
-                onQuizGenerated={handleQuizGenerated}
-              />
+              <div className="flex-1 flex flex-col">
+                {/* Quiz Context Banner */}
+                {showQuizBanner && quizContext && (
+                  <div className="p-4 border-b border-gray-200">
+                    <QuizContextBanner
+                      quizContext={quizContext}
+                      onDismiss={handleDismissQuizBanner}
+                    />
+                  </div>
+                )}
+
+                {/* Quiz Suggested Prompts */}
+                {quizContext && messages.length === 0 && (
+                  <div className="p-4 border-b border-gray-200">
+                    <QuizSuggestedPrompts
+                      quizContext={quizContext}
+                      onPromptSelect={handlePromptSelect}
+                    />
+                  </div>
+                )}
+
+                {/* Chat Component */}
+                <div className="flex-1">
+                  <RealTimeChatComponent
+                    sessionId={activeSessionId || 'guest'}
+                    initialMessages={messages}
+                    onMessageSent={handleMessageSent}
+                    onQuizGenerated={handleQuizGenerated}
+                    quizContext={quizContext}
+                  />
+                </div>
+              </div>
             )}
           </div>
         </div>
