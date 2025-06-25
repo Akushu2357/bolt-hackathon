@@ -21,14 +21,14 @@ interface ChatSession {
 }
 
 export default function ChatPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false); // for message sending
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [showSidebar, setShowSidebar] = useState(false);
   const [guestMessages, setGuestMessages] = useState<Message[]>([]);
@@ -39,6 +39,7 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (authLoading) return;
     // Check provider status
     setProviderStatus(AIChatService.getProviderStatus());
     
@@ -57,13 +58,12 @@ export default function ChatPage() {
     } else {
       // For guest users, load from localStorage
       const savedGuestMessages = localStorage.getItem('guestMessages');
-      
       if (savedGuestMessages) {
         setGuestMessages(JSON.parse(savedGuestMessages));
       }
       setLoadingSessions(false);
     }
-  }, [user, location.search, navigate]);
+  }, [user, authLoading, location.search, navigate]);
 
   useEffect(() => {
     if (currentSession) {
