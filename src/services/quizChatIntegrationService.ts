@@ -99,7 +99,6 @@ static createInitialChatMessage(context: QuizChatContext): string {
     ? 'I have a basic understanding but need to strengthen some areas.'
     : 'I need help understanding the fundamental concepts.';
 
-  // ✅ เพิ่ม fallback ตรงนี้:
   const topic = context.topic || 'my recent';
   const difficulty = context.difficulty || 'medium';
 
