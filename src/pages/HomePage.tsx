@@ -9,9 +9,7 @@ import {
   FileQuestion, 
   TrendingUp, 
   Target,
-  BookOpen,
   Award,
-  Clock,
   ArrowRight,
   Send,
   Bot,
@@ -810,46 +808,6 @@ export default function HomePage() {
                   })}
                 </div>
               )}
-            </div>
-          </div>
-
-          {/* Quick Actions */}
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Link
-                to="/chat"
-                className="card hover:shadow-md transition-all duration-200 group"
-              >
-                <div className="w-12 h-12 bg-blue-500 hover:bg-blue-600 rounded-lg flex items-center justify-center mb-4 transition-colors duration-200">
-                  <MessageCircle className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Continue Chat</h3>
-                <p className="text-gray-600 text-sm mb-4">
-                  Resume your conversation with the AI tutor
-                </p>
-                <div className="flex items-center text-primary-600 text-sm font-medium group-hover:text-primary-700">
-                  Open chat
-                  <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform duration-200" />
-                </div>
-              </Link>
-
-              <Link
-                to="/quiz"
-                className="card hover:shadow-md transition-all duration-200 group"
-              >
-                <div className="w-12 h-12 bg-green-500 hover:bg-green-600 rounded-lg flex items-center justify-center mb-4 transition-colors duration-200">
-                  <FileQuestion className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Take Quiz</h3>
-                <p className="text-gray-600 text-sm mb-4">
-                  Test your knowledge and identify weak areas
-                </p>
-                <div className="flex items-center text-primary-600 text-sm font-medium group-hover:text-primary-700">
-                  Start quiz
-                  <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform duration-200" />
-                </div>
-              </Link>
             </div>
           </div>
         </div>

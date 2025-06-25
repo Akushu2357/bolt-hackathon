@@ -1,22 +1,5 @@
 import { GradingService, GradedQuestion } from './gradingService';
-
-interface Question {
-  id: string;
-  question: string;
-  options?: string[];
-  correct_answer: number | number[] | boolean | string;
-  type: 'single' | 'multiple' | 'true_false' | 'open_ended';
-  explanation: string;
-}
-
-interface Quiz {
-  id: string;
-  title: string;
-  topic: string;
-  difficulty: 'easy' | 'medium' | 'hard';
-  questions: Question[];
-  created_at: string;
-}
+import { Question, Quiz } from '../types';
 
 export interface ScoringResult {
   score: number;
@@ -33,8 +16,13 @@ export class QuizScoringService {
     let gradingResults: GradedQuestion[] = [];
     
     // Collect open-ended questions for batch grading
-    const openEndedQuestions = [];
-    const openEndedIndices = [];
+    const openEndedQuestions: {
+      question: string;
+      answer: string;
+      context: string;
+      questionIndex: number;
+    }[] = [];
+    const openEndedIndices: number[] = [];
     
     for (let index = 0; index < quiz.questions.length; index++) {
       const question = quiz.questions[index];
@@ -43,11 +31,11 @@ export class QuizScoringService {
       
       switch (question.type) {
         case 'multiple':
-          // Multiple choice: check if arrays match
-          const userAnswerArray = Array.isArray(userAnswer) ? userAnswer.sort() : [];
-          const correctAnswerArray = Array.isArray(correctAnswer) ? correctAnswer.sort() : [];
-          
-          if (JSON.stringify(userAnswerArray) === JSON.stringify(correctAnswerArray)) {
+          // Multiple choice: check if arrays match (by value, not reference)
+          const userAnswerArray = Array.isArray(userAnswer) ? [...userAnswer].sort() : [];
+          const correctAnswerArray = Array.isArray(correctAnswer) ? [...correctAnswer].sort() : [];
+          const arraysEqual = (a: any[], b: any[]) => a.length === b.length && a.every((v, i) => v === b[i]);
+          if (arraysEqual(userAnswerArray, correctAnswerArray)) {
             correct++;
           }
           break;
@@ -70,10 +58,9 @@ export class QuizScoringService {
           break;
           
         case 'single':
-        default:
-          // Single choice: handle different correct_answer formats
+        default: {
+          // Single choice: always compare indices
           let isCorrect = false;
-          
           if (Array.isArray(correctAnswer)) {
             // If correct_answer is an array, check if user's answer matches any of them
             // For single choice, userAnswer should be an array with one element
@@ -93,11 +80,11 @@ export class QuizScoringService {
               isCorrect = userAnswer[0] === correctIndex;
             }
           }
-          
           if (isCorrect) {
             correct++;
           }
           break;
+        }
       }
     }
     
@@ -132,24 +119,26 @@ export class QuizScoringService {
     gradingResults?: GradedQuestion[]
   ): boolean {
     const correctAnswer = question.correct_answer;
-    
+
     switch (question.type) {
-      case 'multiple':
-        const userAnswerArray = Array.isArray(userAnswer) ? userAnswer.sort() : [];
-        const correctAnswerArray = Array.isArray(correctAnswer) ? correctAnswer.sort() : [];
-        return JSON.stringify(userAnswerArray) === JSON.stringify(correctAnswerArray);
-        
+      case 'multiple': {
+        // Compare arrays by value, not reference
+        const userAnswerArray = Array.isArray(userAnswer) ? [...userAnswer].sort() : [];
+        const correctAnswerArray = Array.isArray(correctAnswer) ? [...correctAnswer].sort() : [];
+        return userAnswerArray.length === correctAnswerArray.length && userAnswerArray.every((v, i) => v === correctAnswerArray[i]);
+      }
+
       case 'true_false':
         return userAnswer === correctAnswer;
-        
+
       case 'open_ended':
         // For open-ended questions, we need to find the grading result by position
         // This is handled in the component level now
         return false; // Default to false, actual grading is handled elsewhere
-        
+
       case 'single':
-      default:
-        // Single choice: handle different correct_answer formats
+      default: {
+        // Single choice: always compare indices
         if (Array.isArray(correctAnswer)) {
           // If correct_answer is an array, check if user's answer matches any of them
           // For single choice, userAnswer should be an array with one element
@@ -170,6 +159,7 @@ export class QuizScoringService {
           }
         }
         return false;
+      }
     }
   }
 

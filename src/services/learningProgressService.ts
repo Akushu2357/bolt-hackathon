@@ -1,23 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { GradingService, GradedQuestion } from './gradingService';
-
-interface Question {
-  id: string;
-  question: string;
-  options?: string[];
-  correct_answer: number | number[] | boolean | string;
-  type: 'single' | 'multiple' | 'true_false' | 'open_ended';
-  explanation: string;
-}
-
-interface Quiz {
-  id: string;
-  title: string;
-  topic: string;
-  difficulty: 'easy' | 'medium' | 'hard';
-  questions: Question[];
-  created_at: string;
-}
+import { Question, Quiz } from '../types';
 
 export class LearningProgressService {
   static async updateLearningProgress(
@@ -154,8 +137,8 @@ export class LearningProgressService {
       if (existingProgress) {
         // Preserve historical data and add new results
         // For weak areas: keep existing ones and add new ones (but remove items that are now strengths)
-        const existingWeakAreas = Array.isArray(existingProgress.weak_areas) ? existingProgress.weak_areas.filter(area => typeof area === 'string') : [];
-        const existingStrengths = Array.isArray(existingProgress.strengths) ? existingProgress.strengths.filter(area => typeof area === 'string') : [];
+        const existingWeakAreas = Array.isArray(existingProgress.weak_areas) ? existingProgress.weak_areas.filter((area: unknown): area is string => typeof area === 'string') : [];
+        const existingStrengths = Array.isArray(existingProgress.strengths) ? existingProgress.strengths.filter((area: unknown): area is string => typeof area === 'string') : [];
         
         // Extract question parts from existing entries to check for improvements
         const getQuestionFromEntry = (entry: string) => {
@@ -166,13 +149,13 @@ export class LearningProgressService {
         // Remove entries from existing weak areas if the same question is now a strength
         const currentStrengthQuestions = uniqueCurrentStrengths.map(getQuestionFromEntry);
         const filteredExistingWeakAreas = existingWeakAreas.filter(
-          area => !currentStrengthQuestions.includes(getQuestionFromEntry(area))
+          (area: unknown): area is string  => !currentStrengthQuestions.includes(getQuestionFromEntry(area as string))
         );
         
         // Remove entries from existing strengths if the same question is now a weak area
         const currentWeakQuestions = uniqueCurrentWeakAreas.map(getQuestionFromEntry);
         const filteredExistingStrengths = existingStrengths.filter(
-          area => !currentWeakQuestions.includes(getQuestionFromEntry(area))
+          (area: unknown): area is string  => !currentWeakQuestions.includes(getQuestionFromEntry(area as string))
         );
         
         // Merge with current results and ensure all are strings
