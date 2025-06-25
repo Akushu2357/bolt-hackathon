@@ -107,6 +107,13 @@ export default function ScoreOverview({
           </button>
 
           {/*เพิ่มตรงนี้*/}
+          <button
+            onClick={retakeQuiz}
+            className="btn-secondary flex items-center justify-center space-x-2"
+          >
+            <RotateCcw className="w-4 h-4" />
+            <span>Discuss with Tutor AI</span>
+          </button>
           
         </div>
         
