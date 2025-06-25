@@ -42,7 +42,7 @@ interface Stats {
 }
 
 export default function ProfilePage() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [learningProgress, setLearningProgress] = useState<LearningProgress[]>([]);
   const [stats, setStats] = useState<Stats>({
@@ -51,29 +51,34 @@ export default function ProfilePage() {
     averageScore: 0,
     totalTopics: 0
   });
-  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editedName, setEditedName] = useState('');
 
   useEffect(() => {
+    if (loading) return;
     if (user) {
       fetchProfile();
       fetchLearningProgress();
       fetchStats();
+    } else {
+      // Optionally, handle guest profile state here
     }
-  }, [user]);
+  }, [user, loading]);
 
   const fetchProfile = async () => {
     try {
+      console.log('Fetching profile for user:', user);
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user!.id)
         .single();
-
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching profile:', error);
+      }
+      console.log('Fetched profile:', data);
       setProfile(data);
-      setEditedName(data.full_name || '');
+      setEditedName(data?.full_name || '');
     } catch (error) {
       console.error('Error fetching profile:', error);
     }
@@ -81,13 +86,16 @@ export default function ProfilePage() {
 
   const fetchLearningProgress = async () => {
     try {
+      console.log('Fetching learning progress for user:', user);
       const { data, error } = await supabase
         .from('learning_progress')
         .select('*')
         .eq('user_id', user!.id)
         .order('last_updated', { ascending: false });
-
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching learning progress:', error);
+      }
+      console.log('Fetched learning progress:', data);
       setLearningProgress(data || []);
     } catch (error) {
       console.error('Error fetching learning progress:', error);
@@ -96,30 +104,27 @@ export default function ProfilePage() {
 
   const fetchStats = async () => {
     try {
+      console.log('Fetching stats for user:', user);
       // Fetch chat sessions count
       const { count: chatCount } = await supabase
         .from('chat_sessions')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user!.id);
-
       // Fetch quiz attempts
       const { data: quizAttempts } = await supabase
         .from('quiz_attempts')
         .select('score')
         .eq('user_id', user!.id);
-
       // Fetch unique topics
       const { data: topics } = await supabase
         .from('learning_progress')
         .select('topic')
         .eq('user_id', user!.id);
-
       const averageScore = quizAttempts && quizAttempts.length > 0
         ? quizAttempts.reduce((sum, attempt) => sum + attempt.score, 0) / quizAttempts.length
         : 0;
-
       const uniqueTopics = new Set(topics?.map(t => t.topic) || []);
-
+      console.log('Fetched stats:', { chatCount, quizAttempts, topics });
       setStats({
         totalChats: chatCount || 0,
         totalQuizzes: quizAttempts?.length || 0,
@@ -128,8 +133,6 @@ export default function ProfilePage() {
       });
     } catch (error) {
       console.error('Error fetching stats:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
