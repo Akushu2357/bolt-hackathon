@@ -318,7 +318,7 @@ export default function RealTimeChatComponent({
               {quizContext ? `Quiz Discussion` : 'TutorAI Chat'}
             </h3>
             <p className="text-sm text-gray-600">
-              {user ? 'Unlimited access' : `${guestUsage.chats.remaining} messages left`}
+              {user ? '' : `${guestUsage.chats.remaining} messages left`}
             </p>
           </div>
         </div>
