@@ -50,76 +50,83 @@ export default function ChatPage() {
 
   // Handle quiz integration from location state or stored context
   useEffect(() => {
-    const { state } = location as { state?: any };
-    
-    // Check for quiz context from navigation state
-    if (state?.fromQuiz && state?.quizContext) {
+  const { state } = location as {
+    state?: {
+      fromQuiz?: boolean;
+      quizContext?: QuizChatContext;
+      initialMessage?: string;
+    };
+  };
+
+  // Case 1: ทั้ง quizContext และ initialMessage
+  if (state?.fromQuiz) {
+    if (state.quizContext) {
       setQuizContext(state.quizContext);
       setShowQuizBanner(true);
-      
-      // If there's an initial message, set it
-      if (state.initialMessage) {
-        const userMessage: ChatMessage = {
-          id: `quiz_initial_${Date.now()}`,
-          role: 'user',
-          content: state.initialMessage,
-          timestamp: new Date().toISOString(),
-          type: 'text',
-        };
-        setMessages([userMessage]);
-      } else {
-        // Create default initial message
-        const initialMessage = QuizChatIntegrationService.createInitialChatMessage(state.quizContext);
-        const userMessage: ChatMessage = {
-          id: `quiz_auto_${Date.now()}`,
-          role: 'user',
-          content: initialMessage,
-          timestamp: new Date().toISOString(),
-          type: 'text',
-        };
-        setMessages([userMessage]);
-      }
-      
-      // Clear navigation state
-      navigate(location.pathname, { replace: true });
-      return;
-    }
-    
-    // Check for stored quiz context
-    const storedContext = QuizChatIntegrationService.getAndClearQuizContext();
-    if (storedContext) {
-      setQuizContext(storedContext);
-      setShowQuizBanner(true);
-      
-      // Create initial message
-      const initialMessage = QuizChatIntegrationService.createInitialChatMessage(storedContext);
-      const userMessage: ChatMessage = {
-        id: `quiz_stored_${Date.now()}`,
-        role: 'user',
-        content: initialMessage,
-        timestamp: new Date().toISOString(),
-        type: 'text',
-      };
-      setMessages([userMessage]);
-      return;
     }
 
-    // Handle regular initial message from URL params (for logged-out users)
-    const urlParams = new URLSearchParams(location.search);
-    const initialMessage = urlParams.get('message');
-    
-    if (initialMessage && !user) {
+    if (state.initialMessage) {
       const userMessage: ChatMessage = {
-        id: `initial_${Date.now()}`,
+        id: `quiz_initial_${Date.now()}`,
         role: 'user',
-        content: initialMessage,
+        content: state.initialMessage,
         timestamp: new Date().toISOString(),
         type: 'text',
       };
       setMessages([userMessage]);
-      navigate('/chat', { replace: true });
+    } else if (state.quizContext) {
+      // ถ้าไม่มี initialMessage แต่มี context → สร้างให้
+      const autoMessage = QuizChatIntegrationService.createInitialChatMessage(state.quizContext);
+      const userMessage: ChatMessage = {
+        id: `quiz_auto_${Date.now()}`,
+        role: 'user',
+        content: autoMessage,
+        timestamp: new Date().toISOString(),
+        type: 'text',
+      };
+      setMessages([userMessage]);
     }
-  }, [location, navigate, user, setMessages]);
+
+    // ล้าง state
+    navigate(location.pathname, { replace: true });
+    return;
+  }
+
+  // Case 2: มี context ที่เคยเก็บไว้
+  const storedContext = QuizChatIntegrationService.getAndClearQuizContext();
+  if (storedContext) {
+    setQuizContext(storedContext);
+    setShowQuizBanner(true);
+
+    const autoMessage = QuizChatIntegrationService.createInitialChatMessage(storedContext);
+    const userMessage: ChatMessage = {
+      id: `quiz_stored_${Date.now()}`,
+      role: 'user',
+      content: autoMessage,
+      timestamp: new Date().toISOString(),
+      type: 'text',
+    };
+    setMessages([userMessage]);
+    return;
+  }
+
+  // Case 3: Guest ผ่าน URL param
+  const urlParams = new URLSearchParams(location.search);
+  const urlInitialMessage = urlParams.get('message');
+
+  if (urlInitialMessage && !user) {
+    const userMessage: ChatMessage = {
+      id: `initial_${Date.now()}`,
+      role: 'user',
+      content: urlInitialMessage,
+      timestamp: new Date().toISOString(),
+      type: 'text',
+    };
+    setMessages([userMessage]);
+    navigate('/chat', { replace: true });
+  }
+}, [location, navigate, user, setMessages]);
+
   
   const fetchSessions = async () => {
     if (!user) return;
