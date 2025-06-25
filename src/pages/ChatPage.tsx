@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Send, Bot, User, Plus, MessageCircle, Trash2, Menu, X, LogIn } from 'lucide-react';
+import { Send, Bot, User, Plus, MessageCircle, Trash2, Menu, X, LogIn, Settings, Zap } from 'lucide-react';
 import GuestLimitModal from '../components/common/GuestLimitModal';
 import { GuestLimitService } from '../services/guestLimitService';
+import { AIChatService, ChatMessage as AIChatMessage } from '../services/aiChatService';
 
 interface Message {
   id: string;
@@ -32,9 +33,15 @@ export default function ChatPage() {
   const [showSidebar, setShowSidebar] = useState(false);
   const [guestMessages, setGuestMessages] = useState<Message[]>([]);
   const [showLimitModal, setShowLimitModal] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [aiProvider, setAiProvider] = useState<'openai' | 'groq' | 'anthropic'>('groq');
+  const [providerStatus, setProviderStatus] = useState<Record<string, { available: boolean; name: string }>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Check provider status
+    setProviderStatus(AIChatService.getProviderStatus());
+    
     // Check for initial message from URL params (for logged-out users)
     const urlParams = new URLSearchParams(location.search);
     const initialMessage = urlParams.get('message');
@@ -191,7 +198,18 @@ export default function ChatPage() {
             content: userMessage
           });
 
-        const aiResponse = await generateAIResponse(userMessage);
+        // Convert messages to AI chat format for context
+        const conversationHistory: AIChatMessage[] = messages.map(msg => ({
+          role: msg.role,
+          content: msg.content
+        }));
+
+        // Generate AI response using the selected provider
+        const aiResponse = await AIChatService.generateResponse(
+          userMessage, 
+          conversationHistory, 
+          aiProvider
+        );
         
         const aiMsg: Message = {
           id: (Date.now() + 1).toString(),
@@ -235,7 +253,18 @@ export default function ChatPage() {
         const newGuestMessages = [...guestMessages, userMsg];
         setGuestMessages(newGuestMessages);
 
-        const aiResponse = await generateAIResponse(userMessage);
+        // Convert guest messages to AI chat format for context
+        const conversationHistory: AIChatMessage[] = guestMessages.map(msg => ({
+          role: msg.role,
+          content: msg.content
+        }));
+
+        // Generate AI response using the selected provider
+        const aiResponse = await AIChatService.generateResponse(
+          userMessage, 
+          conversationHistory, 
+          aiProvider
+        );
         
         const aiMsg: Message = {
           id: (Date.now() + 1).toString(),
@@ -258,20 +287,6 @@ export default function ChatPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const generateAIResponse = async (message: string): Promise<string> => {
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const responses = [
-      `Great question! Let me help you understand this concept better. ${message.toLowerCase().includes('math') ? 'Mathematics is all about patterns and logical thinking.' : 'This is an interesting topic to explore.'}`,
-      `I'd be happy to explain that! Let's break this down step by step to make it easier to understand.`,
-      `That's a thoughtful question. Here's how I would approach this problem...`,
-      `Excellent! This is a fundamental concept. Let me provide you with a clear explanation and some examples.`,
-      `I can see you're thinking deeply about this. Let me guide you through the solution process.`
-    ];
-    
-    return responses[Math.floor(Math.random() * responses.length)];
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -307,13 +322,53 @@ export default function ChatPage() {
               <div className="p-4 border-b border-gray-200">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold text-gray-900">Chats</h2>
-                  <button
-                    onClick={() => setShowSidebar(false)}
-                    className="lg:hidden p-1 hover:bg-gray-100 rounded"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => setShowSettings(!showSettings)}
+                      className="p-1 hover:bg-gray-100 rounded"
+                      title="AI Settings"
+                    >
+                      <Settings className="w-5 h-5 text-gray-600" />
+                    </button>
+                    <button
+                      onClick={() => setShowSidebar(false)}
+                      className="lg:hidden p-1 hover:bg-gray-100 rounded"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
+
+                {/* AI Provider Settings */}
+                {showSettings && (
+                  <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                    <h3 className="text-sm font-medium text-gray-700 mb-2">AI Provider</h3>
+                    <div className="space-y-2">
+                      {Object.entries(providerStatus).map(([key, status]) => (
+                        <label key={key} className="flex items-center">
+                          <input
+                            type="radio"
+                            name="aiProvider"
+                            value={key}
+                            checked={aiProvider === key}
+                            onChange={(e) => setAiProvider(e.target.value as any)}
+                            className="mr-2"
+                          />
+                          <span className="text-sm text-gray-700">{status.name}</span>
+                          {status.available ? (
+                            <Zap className="w-3 h-3 text-green-500 ml-1" />
+                          ) : (
+                            <span className="text-xs text-gray-400 ml-1">(No API key)</span>
+                          )}
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Add API keys to .env file to enable real AI responses
+                    </p>
+                  </div>
+                )}
+
                 <button
                   onClick={createNewSession}
                   className="w-full btn-primary flex items-center justify-center space-x-2"
@@ -383,9 +438,25 @@ export default function ChatPage() {
             {/* Chat Header */}
             <div className="p-4 border-b border-gray-200 bg-white">
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-gray-900 truncate pl-12 lg:pl-0">
-                  {user ? (currentSession?.title || 'AI Tutor Chat') : 'AI Tutor Chat (Guest Mode)'}
-                </h3>
+                <div className="flex items-center space-x-3">
+                  {user && (
+                    <button
+                      onClick={() => setShowSidebar(true)}
+                      className="lg:hidden p-1 hover:bg-gray-100 rounded"
+                    >
+                      <Menu className="w-5 h-5" />
+                    </button>
+                  )}
+                  <h3 className="font-semibold text-gray-900 truncate">
+                    {user ? (currentSession?.title || 'AI Tutor Chat') : 'AI Tutor Chat (Guest Mode)'}
+                  </h3>
+                  {providerStatus[aiProvider]?.available && (
+                    <div className="flex items-center space-x-1 text-green-600">
+                      <Zap className="w-4 h-4" />
+                      <span className="text-xs font-medium">{providerStatus[aiProvider].name}</span>
+                    </div>
+                  )}
+                </div>
                 {!user && (
                   <div className="flex items-center space-x-2">
                     <span className="text-sm text-gray-600">
@@ -411,12 +482,19 @@ export default function ChatPage() {
                   <h3 className="text-lg font-medium text-gray-900 mb-2">
                     {user ? 'Start a conversation' : 'Welcome to TutorAI!'}
                   </h3>
-                  <p className="text-gray-600">
+                  <p className="text-gray-600 mb-4">
                     {user 
                       ? 'Ask me anything! I\'m here to help you learn.'
                       : `You have ${guestUsage.chats.remaining} free chat${guestUsage.chats.remaining !== 1 ? 's' : ''} remaining. Login for unlimited access!`
                     }
                   </p>
+                  {!providerStatus[aiProvider]?.available && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 max-w-md mx-auto">
+                      <p className="text-sm text-yellow-700">
+                        💡 <strong>Tip:</strong> Add API keys to .env file for real AI responses!
+                      </p>
+                    </div>
+                  )}
                 </div>
               ) : (
                 displayMessages.map((message) => (
