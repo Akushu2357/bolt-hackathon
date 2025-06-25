@@ -12,7 +12,9 @@ import {
   Award,
   BarChart3,
   Lightbulb,
-  ArrowRight
+  ArrowRight,
+  X,
+  Save
 } from 'lucide-react';
 import { 
   LearningDashboardService, 
@@ -118,7 +120,7 @@ export default function LearningDashboardPage() {
   };
 
   const handleDeleteWeakness = async (weaknessId: string) => {
-    if (!user) return;
+    if (!user || !confirm('Are you sure you want to delete this weakness?')) return;
     
     try {
       await LearningDashboardService.deleteWeakness(user, weaknessId);
@@ -183,7 +185,7 @@ export default function LearningDashboardPage() {
   };
 
   const handleDeleteLearningStep = async (stepId: string) => {
-    if (!user) return;
+    if (!user || !confirm('Are you sure you want to delete this learning step?')) return;
     
     try {
       await LearningDashboardService.deleteLearningStep(user, stepId);
@@ -303,15 +305,17 @@ export default function LearningDashboardPage() {
                   <div className="flex space-x-3">
                     <button
                       onClick={editingWeakness ? handleUpdateWeakness : handleCreateWeakness}
-                      className="btn-primary"
+                      className="btn-primary flex items-center space-x-1"
                     >
-                      {editingWeakness ? 'Update' : 'Add'} Weakness
+                      <Save className="w-4 h-4" />
+                      <span>{editingWeakness ? 'Update' : 'Add'}</span>
                     </button>
                     <button
                       onClick={cancelForms}
-                      className="btn-secondary"
+                      className="btn-secondary flex items-center space-x-1"
                     >
-                      Cancel
+                      <X className="w-4 h-4" />
+                      <span>Cancel</span>
                     </button>
                   </div>
                 </div>
@@ -370,19 +374,6 @@ export default function LearningDashboardPage() {
                 ))
               )}
             </div>
-
-            {/* Add weakness input at bottom */}
-            {!showWeaknessForm && weaknesses.length > 0 && (
-              <div className="mt-4">
-                <input
-                  type="text"
-                  placeholder="Weakness title"
-                  className="input-field text-gray-500"
-                  onClick={() => setShowWeaknessForm(true)}
-                  readOnly
-                />
-              </div>
-            )}
           </div>
         </div>
 
@@ -427,15 +418,17 @@ export default function LearningDashboardPage() {
                   <div className="flex space-x-3">
                     <button
                       onClick={editingLearningStep ? handleUpdateLearningStep : handleCreateLearningStep}
-                      className="btn-primary"
+                      className="btn-primary flex items-center space-x-1"
                     >
-                      {editingLearningStep ? 'Update' : 'Add'} Step
+                      <Save className="w-4 h-4" />
+                      <span>{editingLearningStep ? 'Update' : 'Add'}</span>
                     </button>
                     <button
                       onClick={cancelForms}
-                      className="btn-secondary"
+                      className="btn-secondary flex items-center space-x-1"
                     >
-                      Cancel
+                      <X className="w-4 h-4" />
+                      <span>Cancel</span>
                     </button>
                   </div>
                 </div>
