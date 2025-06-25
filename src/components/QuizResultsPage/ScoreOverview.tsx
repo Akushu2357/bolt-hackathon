@@ -1,8 +1,6 @@
 import React from 'react';
-import { Trophy, CheckCircle, XCircle, Star, Eye, EyeOff, RotateCcw, AlertTriangle, Lock, MessageCircle } from 'lucide-react';
+import { Trophy, CheckCircle, XCircle, Star, Eye, EyeOff, RotateCcw, AlertTriangle, Lock } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
-import { QuizChatContext, QuizChatIntegrationService } from '../../services/quizChatIntegrationService';
 
 interface ScoreOverviewProps {
   actualScore: number;
@@ -11,8 +9,7 @@ interface ScoreOverviewProps {
   showAnswers: boolean;
   setShowAnswers: (show: boolean) => void;
   retakeQuiz: () => void;
-  partialCount?: number;
-  quizContext?: QuizChatContext; // เพิ่ม quizContext
+  partialCount?: number; // Add partial count for AI graded questions
 }
 
 const getScoreColor = (score: number) => {
@@ -36,24 +33,11 @@ export default function ScoreOverview({
   showAnswers, 
   setShowAnswers, 
   retakeQuiz,
-  partialCount = 0,
-  quizContext
+  partialCount = 0
 }: ScoreOverviewProps) {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const incorrectCount = totalQuestions - correctCount - partialCount;
-
-  const handleDiscussWithAI = () => {
-    if (!quizContext) return;
-    QuizChatIntegrationService.storeQuizContext(quizContext);
-    navigate('/chat', {
-      state: {
-        fromQuiz: true,
-        quizContext
-      }
-    });
-  };
-
+  
   return (
     <div className={`card mb-6 sm:mb-8 ${getScoreBgColor(actualScore)}`}>
       <div className="text-center">
@@ -119,17 +103,11 @@ export default function ScoreOverview({
             className="btn-secondary flex items-center justify-center space-x-2"
           >
             <RotateCcw className="w-4 h-4" />
-            <span>Retake Quiz</span>
+            <span>Retake Quiz Jaa</span>
           </button>
-          {quizContext && (
-            <button
-              onClick={handleDiscussWithAI}
-              className="btn-outline flex items-center justify-center space-x-2"
-            >
-              <MessageCircle className="w-4 h-4" />
-              <span>Discuss with AI Tutor</span>
-            </button>
-          )}
+
+          {/*เพิ่มตรงนี้*/}
+          
         </div>
         
         {!user && (
