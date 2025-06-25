@@ -8,12 +8,32 @@ export * from './table_quiz_attempts';
 export * from './table_learning_progress';
 export * from './table_schedule';
 
-// Additional types
+// Canonical Question and Quiz interfaces
 export interface Question {
   id: string;
+  type: 'single' | 'multiple' | 'true_false' | 'open_ended';
   question: string;
-  options: string[];
-  correct_answer: number | number[];
-  type?: 'single' | 'multiple';
+  options?: string[];
   explanation: string;
+  correct_answer: number[] | string | boolean;
+}
+
+export interface Quiz {
+  id: string;
+  title: string;
+  topic: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  questions: Question[];
+  created_at: string;
+}
+
+export interface QuizAttempt {
+  id: string;
+  quiz_id: string;
+  score: number;
+  completed_at: string;
+  quiz: {
+    title: string;
+    topic: string;
+  };
 }
