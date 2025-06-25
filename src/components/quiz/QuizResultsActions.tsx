@@ -72,9 +72,7 @@ export default function QuizResultsActions({
           <RotateCcw className="w-4 h-4" />
           <span>Retake Quiz</span>
         </button>
-      </div>
-
-      
+      </div>     
     </div>
   );
 }
