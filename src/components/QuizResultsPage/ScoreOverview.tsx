@@ -1,6 +1,9 @@
 import React from 'react';
-import { Trophy, CheckCircle, XCircle, Star, Eye, EyeOff, RotateCcw, AlertTriangle, Lock } from 'lucide-react';
+import { Trophy, CheckCircle, XCircle, Star, Eye, EyeOff, RotateCcw, AlertTriangle, Lock, MessageCircle, RotateCcw, BookOpen, ArrowRight } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+
+import { useNavigate } from 'react-router-dom';
+import { QuizChatIntegrationService, QuizChatContext } from '../../services/quizChatIntegrationService';
 
 interface ScoreOverviewProps {
   actualScore: number;
