@@ -65,13 +65,6 @@ export default function QuizResultsActions({
           <MessageCircle className="w-4 h-4" />
           <span>Discuss with AI Tutor</span>
         </button>
-        <button
-          onClick={onRetakeQuiz}
-          className="btn-secondary flex items-center justify-center space-x-2"
-        >
-          <RotateCcw className="w-4 h-4" />
-          <span>Retake Quiz</span>
-        </button>
       </div>     
     </div>
   );
