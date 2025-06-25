@@ -101,7 +101,7 @@ static createInitialChatMessage(context: QuizChatContext): string {
 
   // ✅ เพิ่ม fallback ตรงนี้:
   const topic = context.topic || 'my recent';
-  const difficulty = context.difficulty || 'standard';
+  const difficulty = context.difficulty || 'medium';
 
   return `Hi! I just completed a ${topic} quiz (${difficulty} difficulty) and scored ${context.score}%.${weakAreasText} ${performanceText} Can you help me improve my understanding?`;
 }
