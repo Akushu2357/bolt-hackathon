@@ -88,19 +88,24 @@ export class QuizChatIntegrationService {
   /**
    * Create initial chat message with quiz context
    */
-  static createInitialChatMessage(context: QuizChatContext): string {
-    const weakAreasText = context.weakAreas.length > 0 
-      ? ` I particularly struggled with: ${context.weakAreas.slice(0, 3).join(', ')}.`
-      : '';
+static createInitialChatMessage(context: QuizChatContext): string {
+  const weakAreasText = context.weakAreas.length > 0 
+    ? ` I particularly struggled with: ${context.weakAreas.slice(0, 3).join(', ')}.`
+    : '';
 
-    const performanceText = context.score >= 80 
-      ? 'I did well but want to improve further.'
-      : context.score >= 60 
-      ? 'I have a basic understanding but need to strengthen some areas.'
-      : 'I need help understanding the fundamental concepts.';
+  const performanceText = context.score >= 80 
+    ? 'I did well but want to improve further.'
+    : context.score >= 60 
+    ? 'I have a basic understanding but need to strengthen some areas.'
+    : 'I need help understanding the fundamental concepts.';
 
-    return `Hi! I just completed a ${context.topic} quiz (${context.difficulty} difficulty) and scored ${context.score}%.${weakAreasText} ${performanceText} Can you help me improve my understanding?`;
-  }
+  // ✅ เพิ่ม fallback ตรงนี้:
+  const topic = context.topic || 'my recent';
+  const difficulty = context.difficulty || 'standard';
+
+  return `Hi! I just completed a ${topic} quiz (${difficulty} difficulty) and scored ${context.score}%.${weakAreasText} ${performanceText} Can you help me improve my understanding?`;
+}
+
 
   /**
    * Format quiz results for chat context
