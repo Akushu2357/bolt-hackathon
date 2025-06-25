@@ -23,7 +23,7 @@ import { GuestLimitService } from '../services/guestLimitService';
 import { Question, Quiz, QuizAttempt } from '../types';
 
 export default function QuizPage() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
@@ -31,7 +31,7 @@ export default function QuizPage() {
   const [currentQuiz, setCurrentQuiz] = useState<Quiz | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<(number[] | string | boolean | undefined)[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loadingState, setLoading] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newQuizTopic, setNewQuizTopic] = useState('');
   const [newQuizDifficulty, setNewQuizDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
@@ -50,6 +50,7 @@ export default function QuizPage() {
   });
   
   useEffect(() => {
+    if (loading) return;
     if (user) {
       fetchQuizzes();
       fetchAttempts();
@@ -57,7 +58,7 @@ export default function QuizPage() {
       // Load guest quizzes from localStorage
       loadGuestQuizzes();
     }
-  }, [user]);
+  }, [user, loading]);
 
   const loadGuestQuizzes = () => {
     try {
@@ -94,7 +95,9 @@ export default function QuizPage() {
   const fetchQuizzes = async () => {
     if (!user) return;
     try {
+      console.log('Fetching quizzes for user:', user);
       const data = await QuizDataService.fetchQuizzes(user);
+      console.log('Fetched quizzes:', data);
       setQuizzes(data);
     } catch (error) {
       console.error('Error fetching quizzes:', error);
@@ -104,7 +107,9 @@ export default function QuizPage() {
   const fetchAttempts = async () => {
     if (!user) return;
     try {
+      console.log('Fetching attempts for user:', user);
       const data = await QuizDataService.fetchAttempts(user);
+      console.log('Fetched attempts:', data);
       setAttempts(data);
     } catch (error) {
       console.error('Error fetching attempts:', error);
@@ -572,7 +577,7 @@ export default function QuizPage() {
           <CreateQuizForm
             topic={newQuizTopic}
             difficulty={newQuizDifficulty}
-            loading={loading}
+            loading={loadingState}
             onTopicChange={setNewQuizTopic}
             onDifficultyChange={setNewQuizDifficulty}
             onGenerate={generateQuiz}
