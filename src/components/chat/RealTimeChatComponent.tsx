@@ -431,8 +431,8 @@ export default function RealTimeChatComponent({
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder={quizContext 
-                  ? `Ask about your ${quizContext.topic} quiz or any related concepts...`
-                  : "Ask me anything or type /create-quiz to generate a quiz..."
+                  ? `Ask about "${quizContext.topic}"`
+                  : "Ask me anything."
                 }
                 className="w-full resize-none input-field text-sm"
                 rows={1}
