@@ -15,7 +15,7 @@ export default function Footer() {
             <img
               src="/image.png"
               alt="Powered by Bolt"
-              className="h-16 w-16 rounded-full"
+              className="h-16 w-16 rounded-full object-cover object-center"
             />
           </a>
           
