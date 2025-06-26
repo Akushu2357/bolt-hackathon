@@ -17,6 +17,10 @@ import { GuestLimitService } from '../../services/guestLimitService';
 import { QuizChatContext } from '../../services/quizChatIntegrationService';
 import GuestLimitModal from '../common/GuestLimitModal';
 
+import { useLocation } from 'react-router-dom';
+
+
+
 interface RealTimeChatComponentProps {
   sessionId: string;
   initialMessages?: ChatMessage[];
@@ -52,6 +56,36 @@ export default function RealTimeChatComponent({
       messageContainerRef.current.scrollTop = messageContainerRef.current.scrollHeight;
     }
   };
+
+  const location = useLocation();
+  useEffect(() => {
+    const state = location.state as {
+      initialMessage?: string;
+      triggerBotResponse?: boolean;
+    };
+  
+    if (
+      state?.initialMessage &&
+      state?.triggerBotResponse &&
+      !hasProcessedInitialMessage
+    ) {
+      const userMessage: ChatMessage = {
+        id: `homepage_${Date.now()}`,
+        role: 'user',
+        content: state.initialMessage,
+        timestamp: new Date().toISOString(),
+        type: 'text',
+      };
+  
+      setHasProcessedInitialMessage(true);
+      addMessage(userMessage);
+      handleBotResponse(state.initialMessage);
+  
+      // เคลียร์ state เพื่อไม่ให้ใช้ซ้ำ
+      window.history.replaceState({}, document.title);
+    }
+  }, [location, addMessage, handleBotResponse, hasProcessedInitialMessage]);
+
 
   useEffect(() => {
     scrollToBottom();
