@@ -40,6 +40,7 @@ export default function RealTimeChatComponent({
   const [error, setError] = useState<string | null>(null);
   const [showCommands, setShowCommands] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
+  const [hasProcessedInitialMessage, setHasProcessedInitialMessage] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -56,7 +57,6 @@ export default function RealTimeChatComponent({
     scrollToBottom();
   }, [messages]);
 
-
   // Focus input on mount
   useEffect(() => {
     inputRef.current?.focus();
@@ -65,8 +65,19 @@ export default function RealTimeChatComponent({
   // Update messages when initialMessages change
   useEffect(() => {
     setMessages(initialMessages);
-  }, [initialMessages]);
-
+    
+    // Check if we have a new initial message that needs bot response
+    if (initialMessages.length > 0 && !hasProcessedInitialMessage) {
+      const lastMessage = initialMessages[initialMessages.length - 1];
+      
+      // If the last message is from user and we haven't processed it yet
+      if (lastMessage.role === 'user' && lastMessage.id.includes('homepage_')) {
+        setHasProcessedInitialMessage(true);
+        // Trigger bot response for the initial message
+        handleBotResponse(lastMessage.content);
+      }
+    }
+  }, [initialMessages, hasProcessedInitialMessage]);
 
   const addMessage = useCallback((message: ChatMessage) => {
     setMessages(prev => [...prev, message]);
@@ -77,88 +88,100 @@ export default function RealTimeChatComponent({
     setMessages(prev => prev.filter(msg => !msg.metadata?.isTyping));
   }, []);
 
-  const handleSendMessage = async () => {
-  if (!inputMessage.trim() || isLoading) return;
+  // Separate function to handle bot response
+  const handleBotResponse = async (messageText: string) => {
+    if (isLoading) return;
 
-  if (!ChatApiService.validateMessage(inputMessage)) {
-    setError('Message is too long or empty');
-    return;
-  }
+    setIsLoading(true);
+    setError(null);
 
-  if (!user && !GuestLimitService.canPerformAction('chat')) {
-    setShowLimitModal(true);
-    return;
-  }
+    // Add typing indicator
+    const typingIndicator = ChatApiService.createTypingIndicator();
+    setMessages(prev => [...prev, typingIndicator]);
 
-  const userMessage: ChatMessage = {
-    id: `user_${Date.now()}`,
-    role: 'user',
-    content: inputMessage.trim(),
-    timestamp: new Date().toISOString(),
-    type: 'text'
+    try {
+      // Create context from current messages
+      const contextMessages = messages.filter(msg => !msg.metadata?.isTyping).slice(-5);
+      const context = contextMessages.map(msg => `${msg.role}: ${msg.content}`);
+
+      if (quizContext) {
+        context.unshift(`Quiz context: User completed a ${quizContext.topic} quiz (${quizContext.difficulty} difficulty) with ${quizContext.score}% score. Weak areas: ${quizContext.weakAreas.join(', ')}`);
+      }
+
+      const assistantMessage = await ChatApiService.sendMessage(
+        messageText,
+        sessionId,
+        context
+      );
+
+      // Remove typing indicator
+      setMessages(prev => prev.filter(msg => !msg.metadata?.isTyping));
+
+      // Add assistant response
+      setMessages(prev => [...prev, assistantMessage]);
+      onMessageSent?.(assistantMessage);
+
+      if (assistantMessage.type === 'quiz' && assistantMessage.metadata?.quizId) {
+        onQuizGenerated?.(assistantMessage.metadata.quizId);
+      }
+
+    } catch (error) {
+      console.error('Error getting bot response:', error);
+
+      setMessages(prev => prev.filter(msg => !msg.metadata?.isTyping));
+
+      const errorMessage: ChatMessage = {
+        id: `error_${Date.now()}`,
+        role: 'assistant',
+        content: `❌ Sorry, I encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        timestamp: new Date().toISOString(),
+        type: 'error',
+        metadata: { error: error instanceof Error ? error.message : 'Unknown error' }
+      };
+
+      setMessages(prev => [...prev, errorMessage]);
+      setError(error instanceof Error ? error.message : 'Failed to get response');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const messageToSend = inputMessage.trim();
-  setInputMessage('');
-  setError(null);
-  setIsLoading(true);
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim() || isLoading) return;
 
-  // สร้าง messages ใหม่พร้อมข้อความ user และ typing indicator
-  const typingIndicator = ChatApiService.createTypingIndicator();
-  const newMessages = [...messages, userMessage, typingIndicator];
-
-  // อัปเดต state messages ทีเดียวเลย
-  setMessages(newMessages);
-
-  try {
-    // สร้าง context จาก newMessages (ตัด typing indicator)
-    const contextMessages = newMessages.filter(msg => !msg.metadata?.isTyping).slice(-5);
-    const context = contextMessages.map(msg => `${msg.role}: ${msg.content}`);
-
-    if (quizContext) {
-      context.unshift(`Quiz context: User completed a ${quizContext.topic} quiz (${quizContext.difficulty} difficulty) with ${quizContext.score}% score. Weak areas: ${quizContext.weakAreas.join(', ')}`);
+    if (!ChatApiService.validateMessage(inputMessage)) {
+      setError('Message is too long or empty');
+      return;
     }
 
-    const assistantMessage = await ChatApiService.sendMessage(
-      messageToSend,
-      sessionId,
-      context
-    );
-
-    // ลบ typing indicator
-    setMessages(prev => prev.filter(msg => !msg.metadata?.isTyping));
-
-    // เพิ่มข้อความตอบกลับจาก assistant
-    setMessages(prev => [...prev, assistantMessage]);
-
-    if (assistantMessage.type === 'quiz' && assistantMessage.metadata?.quizId) {
-      onQuizGenerated?.(assistantMessage.metadata.quizId);
+    if (!user && !GuestLimitService.canPerformAction('chat')) {
+      setShowLimitModal(true);
+      return;
     }
+
+    const userMessage: ChatMessage = {
+      id: `user_${Date.now()}`,
+      role: 'user',
+      content: inputMessage.trim(),
+      timestamp: new Date().toISOString(),
+      type: 'text'
+    };
+
+    const messageToSend = inputMessage.trim();
+    setInputMessage('');
+    setError(null);
+
+    // Add user message
+    setMessages(prev => [...prev, userMessage]);
+    onMessageSent?.(userMessage);
+
+    // Handle bot response
+    await handleBotResponse(messageToSend);
 
     if (!user) {
       GuestLimitService.incrementUsage('chat');
     }
-  } catch (error) {
-    console.error('Error sending message:', error);
-
-    setMessages(prev => prev.filter(msg => !msg.metadata?.isTyping));
-
-    const errorMessage: ChatMessage = {
-      id: `error_${Date.now()}`,
-      role: 'assistant',
-      content: `❌ Sorry, I encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      timestamp: new Date().toISOString(),
-      type: 'error',
-      metadata: { error: error instanceof Error ? error.message : 'Unknown error' }
-    };
-
-    setMessages(prev => [...prev, errorMessage]);
-    setError(error instanceof Error ? error.message : 'Failed to send message');
-  } finally {
-    setIsLoading(false);
-  }
-};
-
+  };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -231,7 +254,7 @@ export default function RealTimeChatComponent({
             {isTyping ? (
               <div className="flex items-center space-x-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span className="text-sm"></span>
+                <span className="text-sm">TutorAI is typing...</span>
               </div>
             ) : (
               <>
