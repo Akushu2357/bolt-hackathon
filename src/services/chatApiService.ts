@@ -62,6 +62,8 @@ export class ChatApiService {
       } else if (this.OPENAI_API_KEY) {
         return await this.sendToOpenAI(message, context);
       }
+      // Fallback to mock API if no API keys are available
+      return await this.sendToMockAPI(message);
     } catch (error) {
       console.error('Error sending message:', error);
       throw new Error('Failed to send message. Please try again.');
@@ -116,6 +118,54 @@ private static async sendToGroq(
   };
 }
 
+
+  /**
+   * Send message to OpenAI API
+   */
+  private static async sendToOpenAI(
+    message: string,
+    context?: string[]
+  ): Promise<ChatMessage> {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: `You are TutorAI, a helpful educational assistant. ${
+              context ? `Previous context: ${context.join(' ')}` : ''
+            }`
+          },
+          {
+            role: 'user',
+            content: message
+          }
+        ],
+        max_tokens: 500,
+        temperature: 0.7,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const assistantMessage = data.choices[0]?.message?.content;
+
+    return {
+      id: `msg_${Date.now()}`,
+      role: 'assistant',
+      content: assistantMessage,
+      timestamp: new Date().toISOString(),
+      type: 'text'
+    };
+  }
 
   /**
    * Fallback mock API for development/demo
