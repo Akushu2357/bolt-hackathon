@@ -192,7 +192,7 @@ export default function HomePage() {
     setChatLoading(true);
     try {
       if (user) {
-        // Create new chat session for logged-in users
+        // For authenticated users, create new session and navigate with message
         const { data: newSession, error } = await supabase
           .from('chat_sessions')
           .insert({
