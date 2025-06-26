@@ -41,6 +41,7 @@ export default function RealTimeChatComponent({
   const [showCommands, setShowCommands] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [botResponseProcessed, setBotResponseProcessed] = useState(false);
+  const [hasProcessedInitialMessage, setHasProcessedInitialMessage] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
