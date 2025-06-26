@@ -28,7 +28,6 @@ export default function ChatPage() {
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>(sessionId);
   const [quizContext, setQuizContext] = useState<QuizChatContext | null>(null);
   const [showQuizBanner, setShowQuizBanner] = useState(false);
-  const [hasProcessedInitialMessage, setHasProcessedInitialMessage] = useState(false);
 
   const {
     currentSession,
@@ -49,11 +48,8 @@ export default function ChatPage() {
     }
   }, [user]);
 
-  // Handle initial message from HomePage - only set messages, don't trigger bot response
+  // Handle initial message from HomePage and quiz integration
   useEffect(() => {
-    // Prevent processing if already processed
-    if (hasProcessedInitialMessage) return;
-
     const { state } = location as {
       state?: {
         fromQuiz?: boolean;
@@ -73,9 +69,8 @@ export default function ChatPage() {
         type: 'text',
       };
 
-      // Only set the user message, let RealTimeChatComponent handle the bot response
+      // Set the user message for RealTimeChatComponent to process
       setMessages([userMessage]);
-      setHasProcessedInitialMessage(true);
       
       // Clear state to prevent re-triggering
       navigate(location.pathname, { replace: true });
@@ -98,7 +93,6 @@ export default function ChatPage() {
           type: 'text',
         };
         setMessages([userMessage]);
-        setHasProcessedInitialMessage(true);
       } else if (state.quizContext) {
         const autoMessage = QuizChatIntegrationService.createInitialChatMessage(state.quizContext);
         const userMessage: ChatMessage = {
@@ -109,7 +103,6 @@ export default function ChatPage() {
           type: 'text',
         };
         setMessages([userMessage]);
-        setHasProcessedInitialMessage(true);
       }
 
       navigate(location.pathname, { replace: true });
@@ -131,7 +124,6 @@ export default function ChatPage() {
         type: 'text',
       };
       setMessages([userMessage]);
-      setHasProcessedInitialMessage(true);
       return;
     }
 
@@ -139,7 +131,7 @@ export default function ChatPage() {
     const urlParams = new URLSearchParams(location.search);
     const urlInitialMessage = urlParams.get('message');
 
-    if (urlInitialMessage && !user && !hasProcessedInitialMessage) {
+    if (urlInitialMessage && !user) {
       const userMessage: ChatMessage = {
         id: `initial_${Date.now()}`,
         role: 'user',
@@ -148,11 +140,10 @@ export default function ChatPage() {
         type: 'text',
       };
       setMessages([userMessage]);
-      setHasProcessedInitialMessage(true);
 
       navigate('/chat', { replace: true });
     }
-  }, [location, navigate, user, setMessages, hasProcessedInitialMessage]);
+  }, [location, navigate, user, setMessages]);
 
   const fetchSessions = async () => {
     if (!user) return;
@@ -189,8 +180,6 @@ export default function ChatPage() {
       // Clear quiz context when starting new session
       setQuizContext(null);
       setShowQuizBanner(false);
-      // Reset the processed flag for new sessions
-      setHasProcessedInitialMessage(false);
     }
   };
 
@@ -201,8 +190,6 @@ export default function ChatPage() {
     // Clear quiz context when switching sessions
     setQuizContext(null);
     setShowQuizBanner(false);
-    // Reset the processed flag for session switches
-    setHasProcessedInitialMessage(false);
   };
 
   const handleDeleteSession = async (sessionId: string) => {
