@@ -29,7 +29,6 @@ export default function ChatPage() {
   const [quizContext, setQuizContext] = useState<QuizChatContext | null>(null);
   const [showQuizBanner, setShowQuizBanner] = useState(false);
   const [hasProcessedInitialMessage, setHasProcessedInitialMessage] = useState(false);
-  const [isProcessingMessage, setIsProcessingMessage] = useState(false);
 
   const {
     currentSession,
@@ -50,10 +49,10 @@ export default function ChatPage() {
     }
   }, [user]);
 
-  // Handle initial message from HomePage and trigger bot response
+  // Handle initial message from HomePage - only set messages, don't trigger bot response
   useEffect(() => {
-    // Prevent processing if already processing or already processed
-    if (hasProcessedInitialMessage || isProcessingMessage) return;
+    // Prevent processing if already processed
+    if (hasProcessedInitialMessage) return;
 
     const { state } = location as {
       state?: {
@@ -64,10 +63,8 @@ export default function ChatPage() {
       };
     };
 
-    // Case 1: From HomePage with initial message and trigger bot response
+    // Case 1: From HomePage with initial message
     if (state?.initialMessage && state?.triggerBotResponse) {
-      setIsProcessingMessage(true);
-      
       const userMessage: ChatMessage = {
         id: `homepage_${Date.now()}`,
         role: 'user',
@@ -76,17 +73,9 @@ export default function ChatPage() {
         type: 'text',
       };
 
+      // Only set the user message, let RealTimeChatComponent handle the bot response
       setMessages([userMessage]);
       setHasProcessedInitialMessage(true);
-      
-      // Trigger bot response automatically after a short delay
-      setTimeout(async () => {
-        try {
-          await handleSendMessageFromHomePage(state.initialMessage!);
-        } finally {
-          setIsProcessingMessage(false);
-        }
-      }, 200);
       
       // Clear state to prevent re-triggering
       navigate(location.pathname, { replace: true });
@@ -151,8 +140,6 @@ export default function ChatPage() {
     const urlInitialMessage = urlParams.get('message');
 
     if (urlInitialMessage && !user && !hasProcessedInitialMessage) {
-      setIsProcessingMessage(true);
-      
       const userMessage: ChatMessage = {
         id: `initial_${Date.now()}`,
         role: 'user',
@@ -163,61 +150,9 @@ export default function ChatPage() {
       setMessages([userMessage]);
       setHasProcessedInitialMessage(true);
 
-      // Trigger bot response for URL param messages
-      setTimeout(async () => {
-        try {
-          await handleSendMessageFromHomePage(urlInitialMessage);
-        } finally {
-          setIsProcessingMessage(false);
-        }
-      }, 200);
-
       navigate('/chat', { replace: true });
     }
-  }, [location, navigate, user, setMessages, hasProcessedInitialMessage, isProcessingMessage]);
-
-  // Function to handle sending message from HomePage and getting bot response
-  const handleSendMessageFromHomePage = async (text: string) => {
-    try {
-      // Create context for the message
-      const context = quizContext 
-        ? [`Quiz context: User completed a ${quizContext.topic} quiz (${quizContext.difficulty} difficulty) with ${quizContext.score}% score. Weak areas: ${quizContext.weakAreas.join(', ')}`]
-        : [];
-
-      // Send to AI and get response
-      const botReply = await ChatApiService.sendMessage(text, activeSessionId || 'guest', context);
-      
-      // Add bot response to messages
-      setMessages(prev => [...prev, botReply]);
-      
-      // Save both messages if user is authenticated
-      if (user && activeSessionId) {
-        // Save the user message first
-        const userMessage: ChatMessage = {
-          id: `user_${Date.now()}`,
-          role: 'user',
-          content: text,
-          timestamp: new Date().toISOString(),
-          type: 'text',
-        };
-        await saveMessage(userMessage);
-        await saveMessage(botReply);
-      }
-    } catch (error) {
-      console.error('Error getting bot response:', error);
-      
-      // Add error message
-      const errorMessage: ChatMessage = {
-        id: `error_${Date.now()}`,
-        role: 'assistant',
-        content: `❌ Sorry, I encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        timestamp: new Date().toISOString(),
-        type: 'error',
-      };
-      
-      setMessages(prev => [...prev, errorMessage]);
-    }
-  };
+  }, [location, navigate, user, setMessages, hasProcessedInitialMessage]);
 
   const fetchSessions = async () => {
     if (!user) return;
@@ -256,7 +191,6 @@ export default function ChatPage() {
       setShowQuizBanner(false);
       // Reset the processed flag for new sessions
       setHasProcessedInitialMessage(false);
-      setIsProcessingMessage(false);
     }
   };
 
@@ -269,7 +203,6 @@ export default function ChatPage() {
     setShowQuizBanner(false);
     // Reset the processed flag for session switches
     setHasProcessedInitialMessage(false);
-    setIsProcessingMessage(false);
   };
 
   const handleDeleteSession = async (sessionId: string) => {
