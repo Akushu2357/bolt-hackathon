@@ -191,10 +191,27 @@ export default function HomePage() {
 
     setChatLoading(true);
     try {
-      // Navigate to chat with the message as URL parameter to prefill input
-      navigate(`/chat?prefill=${encodeURIComponent(chatInput.trim())}`);
+      if (user) {
+        // For authenticated users, create new session and navigate with prefilled message
+        const { data: newSession, error } = await supabase
+          .from('chat_sessions')
+          .insert({
+            user_id: user.id,
+            title: chatInput.length > 50 ? chatInput.substring(0, 50) + '...' : chatInput
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        // Navigate to chat with the session ID and prefilled message
+        navigate(`/chat/${newSession.id}?prefill=${encodeURIComponent(chatInput.trim())}`);
+      } else {
+        // For guest users, navigate to chat with prefilled message
+        navigate(`/chat?prefill=${encodeURIComponent(chatInput.trim())}`);
+      }
     } catch (error) {
-      console.error('Error navigating to chat:', error);
+      console.error('Error creating chat session:', error);
     } finally {
       setChatLoading(false);
       setChatInput(''); // Clear input after navigation
