@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
@@ -25,50 +25,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const initialAuthHandled = useRef(false);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    let isMounted = true;
+    // On mount, restore session and user
+    const restoreSession = async () => {
+      console.log('[AuthContext] Restoring session...');
+      const { data, error } = await supabase.auth.getSession();
+      if (isMounted) {
+        setSession(data.session);
+        setUser(data.session?.user ?? null);
+        setLoading(false);
+      }
+      if (error) {
+        console.error('Error restoring session:', error);
+      }
+    };
+    restoreSession();
+
+    // Add onAuthStateChange listener
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[AuthContext] onAuthStateChange:', event, session);
       setSession(session);
       setUser(session?.user ?? null);
-      setLoading(false);
-    }).catch(async (error) => {
-      console.error('Error getting session:', error);
-      // Clear any invalid session data
-      await supabase.auth.signOut();
-      setUser(null);
-      setSession(null);
-      setLoading(false);
     });
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
-
-        // Create profile on sign up (event SIGNED_IN)
-        if (event === 'SIGNED_IN' && session?.user) {
-          // Check if profile exists
-          const { data: profile, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .maybeSingle();
-
-          if (error && error.code !== 'PGRST116') {
-            console.error('Error checking profile:', error);
-          } else if (!profile) {
-            // Profile doesn't exist, create it
-            await createProfile(session.user);
-          }
-        }
-      }
-    );
-
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      listener?.subscription.unsubscribe();
+    };
   }, []);
+
+  useEffect(() => {
+    console.log('[AuthContext] State changed:', { user, session, loading });
+  }, [user, session, loading]);
 
   const createProfile = async (user: User) => {
     try {
@@ -88,7 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -97,7 +88,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       },
     });
-
+    if (data?.user) {
+      await createProfile(data.user);
+    }
     return { error };
   };
 
@@ -112,10 +105,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     console.log('Signing out');
-    await supabase.auth.signOut();
-    console.log('Signed out');
-    setUser(null);
-    setSession(null);
+    let signOutCompleted = false;
+    // Set a timeout to force-clear session if signOut hangs
+    const timeout = setTimeout(() => {
+      if (!signOutCompleted) {
+        console.warn('Supabase signOut timed out, force clearing session.');
+        Object.keys(localStorage).forEach((key) => {
+          if (key.startsWith('sb-')) localStorage.removeItem(key);
+        });
+        window.location.reload();
+      }
+    }, 3000); // 3 seconds
+
+    try {
+      const { error } = await supabase.auth.signOut();
+      signOutCompleted = true;
+      clearTimeout(timeout);
+      if (error) {
+        console.error('Supabase signOut error:', error);
+      } else {
+        console.log('Supabase signOut success');
+      }
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith('sb-')) localStorage.removeItem(key);
+      });
+      window.location.reload();
+    } catch (err) {
+      signOutCompleted = true;
+      clearTimeout(timeout);
+      console.error('Exception during signOut:', err);
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith('sb-')) localStorage.removeItem(key);
+      });
+      window.location.reload();
+    }
   };
 
   const value = {
