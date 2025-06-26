@@ -73,11 +73,17 @@ export default function RealTimeChatComponent({
       // If the last message is from user and we haven't processed it yet
       if (lastMessage.role === 'user' && lastMessage.id.includes('homepage_')) {
         setHasProcessedInitialMessage(true);
+        
+        // For guest users, increment chat usage when processing initial message
+        if (!user) {
+          GuestLimitService.incrementUsage('chat');
+        }
+        
         // Trigger bot response for the initial message
         handleBotResponse(lastMessage.content);
       }
     }
-  }, [initialMessages, hasProcessedInitialMessage]);
+  }, [initialMessages, hasProcessedInitialMessage, user]);
 
   const addMessage = useCallback((message: ChatMessage) => {
     setMessages(prev => [...prev, message]);
@@ -178,6 +184,7 @@ export default function RealTimeChatComponent({
     // Handle bot response
     await handleBotResponse(messageToSend);
 
+    // Increment guest usage for regular chat messages (not initial messages)
     if (!user) {
       GuestLimitService.incrementUsage('chat');
     }
