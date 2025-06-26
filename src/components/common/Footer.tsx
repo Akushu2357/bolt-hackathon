@@ -10,7 +10,6 @@ export default function Footer() {
             href="https://bolt.new/"
             target="_blank"
             rel="noopener noreferrer"
-            className="transition-transform duration-200 hover:scale-105"
           >
             <img
               src="/image.png"
