@@ -191,37 +191,13 @@ export default function HomePage() {
 
     setChatLoading(true);
     try {
-      if (user) {
-        // Create new chat session for logged-in users
-        const { data: newSession, error } = await supabase
-          .from('chat_sessions')
-          .insert({
-            user_id: user.id,
-            title: chatInput.length > 50 ? chatInput.substring(0, 50) + '...' : chatInput
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-
-        // Add the initial message to the session
-        await supabase
-          .from('chat_messages')
-          .insert({
-            session_id: newSession.id,
-            role: 'user',
-            content: chatInput
-          });
-
-        navigate('/chat');
-      } else {
-        // For logged-out users, navigate to chat with query parameter
-        navigate(`/chat?message=${encodeURIComponent(chatInput)}`);
-      }
+      // Navigate to chat with the message as URL parameter to prefill input
+      navigate(`/chat?prefill=${encodeURIComponent(chatInput.trim())}`);
     } catch (error) {
-      console.error('Error creating chat session:', error);
+      console.error('Error navigating to chat:', error);
     } finally {
       setChatLoading(false);
+      setChatInput(''); // Clear input after navigation
     }
   };
 
