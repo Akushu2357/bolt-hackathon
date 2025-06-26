@@ -164,20 +164,24 @@ private static async sendToGroq(
     sessionId: string
   ): Promise<ChatMessage> {
     try {
-      // Parse the command
-      const parts = command.split(' ');
-      const commandType = parts[0]; // /create-quiz or /quiz
-      const topic = parts[1] || 'general knowledge';
-      const difficulty = (parts[2] as 'easy' | 'medium' | 'hard') || 'medium';
+      // ตัดช่องว่างส่วนเกินออก แล้วแยกด้วย space
+      const parts = command.trim().split(' ');
 
-      // Validate difficulty
       const validDifficulties = ['easy', 'medium', 'hard'];
-      const finalDifficulty = validDifficulties.includes(difficulty) ? difficulty : 'medium';
+      const maybeDifficulty = parts[parts.length - 1];
+      const hasValidDifficulty = validDifficulties.includes(maybeDifficulty);
 
-      // Generate quiz using existing quiz service
+      const finalDifficulty = hasValidDifficulty ? maybeDifficulty : 'medium';
+
+      // รวม topic หลายคำไว้ เช่น "Three Kingdoms" หรือ "World War II"
+      const topic = hasValidDifficulty
+        ? parts.slice(1, parts.length - 1).join(' ')
+        : parts.slice(1).join(' ');
+
+      // สร้างคำขอสำหรับ generate quiz
       const quizRequest: QuizGenerationRequest = {
         topic,
-        difficulty: finalDifficulty,
+        difficulty: finalDifficulty as 'easy' | 'medium' | 'hard',
         numberOfQuestions: 5,
         context: `Generated from chat command: ${command}`
       };
@@ -208,6 +212,7 @@ private static async sendToGroq(
       };
     }
   }
+
 
   /**
    * Generate quiz from chat context
