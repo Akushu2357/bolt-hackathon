@@ -11,6 +11,7 @@ import QuizResultsPage from './pages/QuizResultsPage';
 import ProfilePage from './pages/ProfilePage';
 import LearningDashboardPage from './pages/LearningDashboardPage';
 import LoadingSpinner from './components/QuizResultsPage/LoadingSpinner';
+import NonDirectionPage from './pages/NonDirectionPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -124,6 +125,10 @@ function AppRoutes() {
             <ProfilePage />
           </Layout>
         </ProtectedRoute>
+      } />
+      {/* Catch-all route to redirect to home if no match */}
+      <Route path="*" element={
+        <NonDirectionPage />
       } />
     </Routes>
   );
