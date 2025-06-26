@@ -17,8 +17,6 @@ import { GuestLimitService } from '../../services/guestLimitService';
 import { QuizChatContext } from '../../services/quizChatIntegrationService';
 import GuestLimitModal from '../common/GuestLimitModal';
 
-import { useLocation } from 'react-router-dom';
-
 interface RealTimeChatComponentProps {
   sessionId: string;
   initialMessages?: ChatMessage[];
@@ -55,8 +53,6 @@ export default function RealTimeChatComponent({
     }
   };
 
-  const location = useLocation();
-
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
@@ -66,11 +62,22 @@ export default function RealTimeChatComponent({
     inputRef.current?.focus();
   }, []);
 
+  // Update messages when initialMessages change
   useEffect(() => {
-    if (messages.length === 0 && initialMessages.length > 0) {
-      setMessages(initialMessages);
+    setMessages(initialMessages);
+    
+    // Check if we have a new initial message that needs bot response
+    if (initialMessages.length > 0 && !hasProcessedInitialMessage) {
+      const lastMessage = initialMessages[initialMessages.length - 1];
+      
+      // If the last message is from user and we haven't processed it yet
+      if (lastMessage.role === 'user' && lastMessage.id.includes('homepage_')) {
+        setHasProcessedInitialMessage(true);
+        // Trigger bot response for the initial message
+        handleBotResponse(lastMessage.content);
+      }
     }
-  }, [initialMessages]);
+  }, [initialMessages, hasProcessedInitialMessage]);
 
   const addMessage = useCallback((message: ChatMessage) => {
     setMessages(prev => [...prev, message]);
@@ -81,11 +88,10 @@ export default function RealTimeChatComponent({
     setMessages(prev => prev.filter(msg => !msg.metadata?.isTyping));
   }, []);
 
-  // Separate function to handle bot response - ลบ handleBotResponse จาก dependency
-  const handleBotResponse = useCallback(async (messageText: string) => {
+  // Separate function to handle bot response
+  const handleBotResponse = async (messageText: string) => {
     if (isLoading) return;
 
-    console.log('Bot responding to:', messageText);
     setIsLoading(true);
     setError(null);
 
@@ -138,46 +144,7 @@ export default function RealTimeChatComponent({
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, sessionId, quizContext, onMessageSent, onQuizGenerated]); // ลบ messages ออกจาก dependency
-
-  // Handle initial message from homepage - แยกออกมาเป็น useEffect ต่างหาก
-  useEffect(() => {
-    const state = location.state as {
-      initialMessage?: string;
-      triggerBotResponse?: boolean;
-    };
-  
-    if (
-      state?.initialMessage &&
-      state?.triggerBotResponse &&
-      !hasProcessedInitialMessage
-    ) {
-      console.log('Processing initial message from homepage:', state.initialMessage);
-      
-      const userMessage: ChatMessage = {
-        id: `homepage_${Date.now()}`,
-        role: 'user',
-        content: state.initialMessage,
-        timestamp: new Date().toISOString(),
-        type: 'text',
-      };
-  
-      setHasProcessedInitialMessage(true);
-      
-      // เพิ่มข้อความของผู้ใช้ก่อน
-      setMessages(prev => [...prev, userMessage]);
-      onMessageSent?.(userMessage);
-      
-      // Clear state to prevent reuse
-      window.history.replaceState({}, document.title);
-      
-      // ใช้ setTimeout เพื่อให้ state update เสร็จก่อน แล้วค่อยให้ bot ตอบ
-      setTimeout(() => {
-        console.log('Triggering bot response for:', state.initialMessage);
-        handleBotResponse(state.initialMessage);
-      }, 500); // เพิ่ม delay ให้มากขึ้นเพื่อให้แน่ใจว่า state update เสร็จแล้ว
-    }
-  }, [location.state, hasProcessedInitialMessage, onMessageSent, handleBotResponse]);
+  };
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
