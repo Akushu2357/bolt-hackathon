@@ -222,12 +222,7 @@ export default function HomePage() {
         });
       } else {
         // For guest users, navigate to chat with the message in state
-        navigate('/chat', {
-          state: {
-            initialMessage: chatInput,
-            triggerBotResponse: true
-          }
-        });
+        
       }
     } catch (error) {
       console.error('Error creating chat session:', error);
