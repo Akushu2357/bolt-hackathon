@@ -28,6 +28,7 @@ export default function ChatPage() {
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>(sessionId);
   const [quizContext, setQuizContext] = useState<QuizChatContext | null>(null);
   const [showQuizBanner, setShowQuizBanner] = useState(false);
+  const [hasProcessedInitialMessage, setHasProcessedInitialMessage] = useState(false);
 
   const {
     currentSession,
@@ -50,6 +51,9 @@ export default function ChatPage() {
 
   // Handle initial message from HomePage and trigger bot response
   useEffect(() => {
+    // Prevent processing the same initial message multiple times
+    if (hasProcessedInitialMessage) return;
+
     const { state } = location as {
       state?: {
         fromQuiz?: boolean;
@@ -70,9 +74,12 @@ export default function ChatPage() {
       };
 
       setMessages([userMessage]);
+      setHasProcessedInitialMessage(true);
       
-      // Trigger bot response automatically
-      handleSendMessageFromHomePage(state.initialMessage);
+      // Trigger bot response automatically after a short delay to ensure message is set
+      setTimeout(() => {
+        handleSendMessageFromHomePage(state.initialMessage!);
+      }, 100);
       
       // Clear state to prevent re-triggering
       navigate(location.pathname, { replace: true });
@@ -95,6 +102,7 @@ export default function ChatPage() {
           type: 'text',
         };
         setMessages([userMessage]);
+        setHasProcessedInitialMessage(true);
       } else if (state.quizContext) {
         const autoMessage = QuizChatIntegrationService.createInitialChatMessage(state.quizContext);
         const userMessage: ChatMessage = {
@@ -105,6 +113,7 @@ export default function ChatPage() {
           type: 'text',
         };
         setMessages([userMessage]);
+        setHasProcessedInitialMessage(true);
       }
 
       navigate(location.pathname, { replace: true });
@@ -126,6 +135,7 @@ export default function ChatPage() {
         type: 'text',
       };
       setMessages([userMessage]);
+      setHasProcessedInitialMessage(true);
       return;
     }
 
@@ -133,7 +143,7 @@ export default function ChatPage() {
     const urlParams = new URLSearchParams(location.search);
     const urlInitialMessage = urlParams.get('message');
 
-    if (urlInitialMessage && !user) {
+    if (urlInitialMessage && !user && !hasProcessedInitialMessage) {
       const userMessage: ChatMessage = {
         id: `initial_${Date.now()}`,
         role: 'user',
@@ -142,13 +152,16 @@ export default function ChatPage() {
         type: 'text',
       };
       setMessages([userMessage]);
+      setHasProcessedInitialMessage(true);
 
-      handleMessageSent(userMessage);
-      handleSendMessageFromHomePage(urlInitialMessage);
+      // Trigger bot response for URL param messages
+      setTimeout(() => {
+        handleSendMessageFromHomePage(urlInitialMessage);
+      }, 100);
 
       navigate('/chat', { replace: true });
     }
-  }, [location, navigate, user, setMessages]);
+  }, [location, navigate, user, setMessages, hasProcessedInitialMessage]);
 
   // Function to handle sending message from HomePage and getting bot response
   const handleSendMessageFromHomePage = async (text: string) => {
@@ -164,7 +177,7 @@ export default function ChatPage() {
       // Add bot response to messages
       setMessages(prev => [...prev, botReply]);
       
-      // Save both messages if user is authenticated
+      // Save bot message if user is authenticated
       if (user && activeSessionId) {
         await saveMessage(botReply);
       }
@@ -175,7 +188,7 @@ export default function ChatPage() {
       const errorMessage: ChatMessage = {
         id: `error_${Date.now()}`,
         role: 'assistant',
-        content: `❌ Sorry, I encountered an error: ${(error as Error).message}`,
+        content: `❌ Sorry, I encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}`,
         timestamp: new Date().toISOString(),
         type: 'error',
       };
@@ -219,6 +232,8 @@ export default function ChatPage() {
       // Clear quiz context when starting new session
       setQuizContext(null);
       setShowQuizBanner(false);
+      // Reset the processed flag for new sessions
+      setHasProcessedInitialMessage(false);
     }
   };
 
@@ -229,6 +244,8 @@ export default function ChatPage() {
     // Clear quiz context when switching sessions
     setQuizContext(null);
     setShowQuizBanner(false);
+    // Reset the processed flag for session switches
+    setHasProcessedInitialMessage(false);
   };
 
   const handleDeleteSession = async (sessionId: string) => {
