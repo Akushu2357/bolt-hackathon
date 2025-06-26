@@ -29,6 +29,7 @@ export default function ChatPage() {
   const [quizContext, setQuizContext] = useState<QuizChatContext | null>(null);
   const [showQuizBanner, setShowQuizBanner] = useState(false);
   const [hasProcessedInitialMessage, setHasProcessedInitialMessage] = useState(false);
+  const [isProcessingMessage, setIsProcessingMessage] = useState(false);
 
   const {
     currentSession,
@@ -51,8 +52,8 @@ export default function ChatPage() {
 
   // Handle initial message from HomePage and trigger bot response
   useEffect(() => {
-    // Prevent processing the same initial message multiple times
-    if (hasProcessedInitialMessage) return;
+    // Prevent processing if already processing or already processed
+    if (hasProcessedInitialMessage || isProcessingMessage) return;
 
     const { state } = location as {
       state?: {
@@ -65,6 +66,8 @@ export default function ChatPage() {
 
     // Case 1: From HomePage with initial message and trigger bot response
     if (state?.initialMessage && state?.triggerBotResponse) {
+      setIsProcessingMessage(true);
+      
       const userMessage: ChatMessage = {
         id: `homepage_${Date.now()}`,
         role: 'user',
@@ -76,10 +79,14 @@ export default function ChatPage() {
       setMessages([userMessage]);
       setHasProcessedInitialMessage(true);
       
-      // Trigger bot response automatically after a short delay to ensure message is set
-      setTimeout(() => {
-        handleSendMessageFromHomePage(state.initialMessage!);
-      }, 100);
+      // Trigger bot response automatically after a short delay
+      setTimeout(async () => {
+        try {
+          await handleSendMessageFromHomePage(state.initialMessage!);
+        } finally {
+          setIsProcessingMessage(false);
+        }
+      }, 200);
       
       // Clear state to prevent re-triggering
       navigate(location.pathname, { replace: true });
@@ -144,6 +151,8 @@ export default function ChatPage() {
     const urlInitialMessage = urlParams.get('message');
 
     if (urlInitialMessage && !user && !hasProcessedInitialMessage) {
+      setIsProcessingMessage(true);
+      
       const userMessage: ChatMessage = {
         id: `initial_${Date.now()}`,
         role: 'user',
@@ -155,13 +164,17 @@ export default function ChatPage() {
       setHasProcessedInitialMessage(true);
 
       // Trigger bot response for URL param messages
-      setTimeout(() => {
-        handleSendMessageFromHomePage(urlInitialMessage);
-      }, 100);
+      setTimeout(async () => {
+        try {
+          await handleSendMessageFromHomePage(urlInitialMessage);
+        } finally {
+          setIsProcessingMessage(false);
+        }
+      }, 200);
 
       navigate('/chat', { replace: true });
     }
-  }, [location, navigate, user, setMessages, hasProcessedInitialMessage]);
+  }, [location, navigate, user, setMessages, hasProcessedInitialMessage, isProcessingMessage]);
 
   // Function to handle sending message from HomePage and getting bot response
   const handleSendMessageFromHomePage = async (text: string) => {
@@ -177,8 +190,17 @@ export default function ChatPage() {
       // Add bot response to messages
       setMessages(prev => [...prev, botReply]);
       
-      // Save bot message if user is authenticated
+      // Save both messages if user is authenticated
       if (user && activeSessionId) {
+        // Save the user message first
+        const userMessage: ChatMessage = {
+          id: `user_${Date.now()}`,
+          role: 'user',
+          content: text,
+          timestamp: new Date().toISOString(),
+          type: 'text',
+        };
+        await saveMessage(userMessage);
         await saveMessage(botReply);
       }
     } catch (error) {
@@ -234,6 +256,7 @@ export default function ChatPage() {
       setShowQuizBanner(false);
       // Reset the processed flag for new sessions
       setHasProcessedInitialMessage(false);
+      setIsProcessingMessage(false);
     }
   };
 
@@ -246,6 +269,7 @@ export default function ChatPage() {
     setShowQuizBanner(false);
     // Reset the processed flag for session switches
     setHasProcessedInitialMessage(false);
+    setIsProcessingMessage(false);
   };
 
   const handleDeleteSession = async (sessionId: string) => {
