@@ -78,16 +78,11 @@ export default function RealTimeChatComponent({
         // Mark this message as processed
         setProcessedMessageIds(prev => new Set([...prev, lastMessage.id]));
         
-        // 🎯 หัก chat usage เฉพาะ guest users เมื่อ process initial message จาก HomePage
-        if (!user) {
-          GuestLimitService.incrementUsage('chat');
-        }
-        
-        // Trigger bot response for the initial message
-        handleBotResponse(lastMessage.content);
+        // Trigger bot response for the initial message (without deducting usage here)
+        handleBotResponse(lastMessage.content, true); // true = isInitialMessage
       }
     }
-  }, [initialMessages, user, processedMessageIds]);
+  }, [initialMessages, processedMessageIds]);
 
   const addMessage = useCallback((message: ChatMessage) => {
     setMessages(prev => [...prev, message]);
@@ -99,7 +94,7 @@ export default function RealTimeChatComponent({
   }, []);
 
   // Separate function to handle bot response
-  const handleBotResponse = async (messageText: string) => {
+  const handleBotResponse = async (messageText: string, isInitialMessage = false) => {
     if (isLoading) return;
 
     setIsLoading(true);
@@ -133,6 +128,11 @@ export default function RealTimeChatComponent({
 
       if (assistantMessage.type === 'quiz' && assistantMessage.metadata?.quizId) {
         onQuizGenerated?.(assistantMessage.metadata.quizId);
+      }
+
+      // 🎯 หัก guest usage เฉพาะสำหรับ initial messages จาก HomePage
+      if (!user && isInitialMessage) {
+        GuestLimitService.incrementUsage('chat');
       }
 
     } catch (error) {
@@ -185,13 +185,13 @@ export default function RealTimeChatComponent({
     setMessages(prev => [...prev, userMessage]);
     onMessageSent?.(userMessage);
 
-    // Handle bot response
-    await handleBotResponse(messageToSend);
-
-    // 🎯 หัก guest usage เฉพาะสำหรับ regular chat messages (ไม่ใช่ initial messages)
+    // 🎯 หัก guest usage สำหรับ regular chat messages (ไม่ใช่ initial messages)
     if (!user) {
       GuestLimitService.incrementUsage('chat');
     }
+
+    // Handle bot response (without deducting usage again)
+    await handleBotResponse(messageToSend, false); // false = not initial message
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
