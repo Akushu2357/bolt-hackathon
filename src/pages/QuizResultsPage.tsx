@@ -184,96 +184,121 @@ export default function QuizResultsPage() {
       // Calculate correct count using the new grading logic
       const correctCount = quiz.questions.filter((_, index) => getAnswerGrade(index) === 'correct').length;
       const partialCount = quiz.questions.filter((_, index) => getAnswerGrade(index) === 'partial').length;
+      const incorrectCount = quiz.questions.filter((_, index) => getAnswerGrade(index) === 'incorrect').length;
 
       // Recalculate the actual score based on correct answers and partial credit
       const actualScore = Math.round(((correctCount + (partialCount * 0.5)) / quiz.questions.length) * 100);
 
-      const incorrectQuestions = quiz.questions.filter((_, index) => {
-        return getAnswerGrade(index) === 'incorrect';
+      // Analyze strengths and weaknesses from current quiz
+      const strengths = [];
+      const weaknesses = [];
+      
+      quiz.questions.forEach((question, index) => {
+        const grade = getAnswerGrade(index);
+        
+        if (grade === 'correct' || grade === 'partial') {
+          // Identify topic/concept from question
+          const concept = question.question.length > 60 
+            ? question.question.substring(0, 60) + "..." 
+            : question.question;
+          strengths.push(concept);
+        } else {
+          const concept = question.question.length > 60 
+            ? question.question.substring(0, 60) + "..." 
+            : question.question;
+          weaknesses.push(concept);
+        }
       });
 
-      // Generate basic analysis for guest users, detailed for authenticated users
+      // Extract weak areas from AI grading for more specific insights
+      const aiWeakAreas = gradingResults ? 
+        [...new Set(gradingResults.flatMap(r => r.weakAreas || []))] : [];
+      
+      const aiImprovements = gradingResults ? 
+        [...new Set(gradingResults.flatMap(r => r.improvements || []))] : [];
+
+      // Generate dynamic analysis
       let analysis = '';
       
       if (!user) {
         // Basic analysis for guest users
-        if (actualScore >= 80) {
-          analysis = `Great job! You scored ${actualScore}% on this ${quiz.topic} quiz. You got ${correctCount} out of ${quiz.questions.length} questions correct. `;
-          analysis += `Login to get detailed feedback, track your progress, and access unlimited quizzes!`;
-        } else if (actualScore >= 60) {
-          analysis = `Good effort! You scored ${actualScore}% on this ${quiz.topic} quiz. You got ${correctCount} out of ${quiz.questions.length} questions correct. `;
-          analysis += `Login to see detailed explanations, identify weak areas, and improve your understanding!`;
-        } else {
-          analysis = `You scored ${actualScore}% on this ${quiz.topic} quiz. You got ${correctCount} out of ${quiz.questions.length} questions correct. `;
-          analysis += `Login to access detailed feedback, personalized learning recommendations, and unlimited practice quizzes!`;
+        analysis = `You completed the ${quiz.topic} quiz with a score of ${actualScore}% (${correctCount}/${quiz.questions.length} correct`;
+        if (partialCount > 0) {
+          analysis += `, ${partialCount} partial`;
         }
+        analysis += `). `;
+        
+        if (actualScore >= 70) {
+          analysis += `This shows good understanding of the topic. `;
+        } else {
+          analysis += `There's room for improvement in your understanding of this topic. `;
+        }
+        
+        analysis += `Login to get detailed feedback, track your progress, and access unlimited quizzes!`;
       } else {
-        // Detailed analysis for authenticated users (existing logic)
+        // Dynamic analysis for authenticated users
+        analysis = `Your performance on this ${quiz.topic} quiz (${quiz.difficulty} difficulty) resulted in a ${actualScore}% score. `;
+        
+        // Overall performance assessment
         if (actualScore >= 90) {
-          analysis = `🎉 Outstanding performance! You've demonstrated excellent mastery of ${quiz.topic}. Your ${actualScore}% score shows you have a strong understanding of the core concepts. `;
-          if (incorrectQuestions.length > 0) {
-            analysis += `Focus on reviewing the ${incorrectQuestions.length} question(s) you missed to achieve perfect understanding. `;
-          }
-          if (partialCount > 0) {
-            analysis += `You received partial credit on ${partialCount} question(s), showing good understanding that can be refined. `;
-          }
-          analysis += `Consider challenging yourself with harder difficulty levels or exploring advanced topics in ${quiz.topic}.`;
+          analysis += `This demonstrates excellent mastery of the subject matter. `;
         } else if (actualScore >= 80) {
-          analysis = `👏 Great job! Your ${actualScore}% score indicates solid understanding of ${quiz.topic}. You're on the right track with ${correctCount} fully correct answers out of ${quiz.questions.length}. `;
-          if (partialCount > 0) {
-            analysis += `You also received partial credit on ${partialCount} question(s), which shows you're grasping the concepts but can improve your explanations. `;
-          }
-          if (incorrectQuestions.length > 0) {
-            analysis += `Review the ${incorrectQuestions.length} areas where you had difficulty - these represent opportunities for growth. `;
-          }
-          analysis += `With a bit more practice, you'll master this topic completely.`;
+          analysis += `This indicates a solid understanding with room for minor improvements. `;
         } else if (actualScore >= 60) {
-          analysis = `📚 Good effort! You scored ${actualScore}%, showing you understand the basics of ${quiz.topic}. You got ${correctCount} questions fully right`;
-          if (partialCount > 0) {
-            analysis += ` and ${partialCount} partially correct`;
-          }
-          analysis += `, which is a solid foundation. `;
-          analysis += `Focus on the ${incorrectQuestions.length} questions you missed - understanding these concepts will significantly improve your knowledge. `;
-          analysis += `Consider reviewing the explanations and taking additional practice quizzes to strengthen your understanding.`;
+          analysis += `This shows a good foundation with several areas that need strengthening. `;
         } else {
-          analysis = `💪 Don't worry - learning is a journey! Your ${actualScore}% score shows you're building foundational knowledge in ${quiz.topic}. `;
-          analysis += `You got ${correctCount} questions fully correct`;
+          analysis += `This suggests you're still building your knowledge in this area. `;
+        }
+
+        // Strengths analysis
+        if (correctCount > 0) {
+          analysis += `Your strengths were evident in ${correctCount} question${correctCount > 1 ? 's' : ''} where you demonstrated clear understanding. `;
+          
           if (partialCount > 0) {
-            analysis += ` and ${partialCount} partially correct`;
+            analysis += `Additionally, you showed partial understanding in ${partialCount} question${partialCount > 1 ? 's' : ''}, indicating you're on the right track but could benefit from more detailed explanations. `;
           }
-          analysis += `, which means you're already grasping some key concepts. `;
-          analysis += `Focus on understanding the explanations for the questions you missed. Consider reviewing the basic concepts and taking the quiz again to track your improvement.`;
         }
 
-        // Add specific recommendations based on question types missed (only for authenticated users)
-        const missedTypes = incorrectQuestions.map(q => q.type);
-        if (missedTypes.includes('multiple')) {
-          analysis += ` Pay special attention to multiple-choice questions - they often test comprehensive understanding of topics.`;
-        }
-        if (missedTypes.includes('open_ended')) {
-          analysis += ` Work on articulating your thoughts clearly for open-ended questions.`;
+        // Areas to focus on
+        if (incorrectCount > 0) {
+          analysis += `There are ${incorrectCount} area${incorrectCount > 1 ? 's' : ''} that require your attention for improvement. `;
+          
+          // Add specific weak areas from AI grading if available
+          if (aiWeakAreas.length > 0) {
+            analysis += `Based on your responses, focus particularly on: ${aiWeakAreas.slice(0, 3).join(', ')}. `;
+          }
         }
 
-        // Add insights from grading results if available (only for authenticated users)
-        if (gradingResults && gradingResults.length > 0) {
-          const partialCredits = gradingResults.filter(r => r.grade === 'partial').length;
-          const incorrectOpenEnded = gradingResults.filter(r => r.grade === 'incorrect').length;
-          const correctOpenEnded = gradingResults.filter(r => r.grade === 'correct').length;
+        // Question type analysis
+        const questionTypes = quiz.questions.map(q => q.type);
+        const hasOpenEnded = questionTypes.includes('open_ended');
+        const hasMultiple = questionTypes.includes('multiple');
+        
+        if (hasOpenEnded && gradingResults) {
+          const openEndedCorrect = gradingResults.filter(r => r.grade === 'correct').length;
+          const openEndedPartial = gradingResults.filter(r => r.grade === 'partial').length;
+          const openEndedTotal = gradingResults.length;
           
-          if (partialCredits > 0) {
-            analysis += ` You received partial credit on ${partialCredits} open-ended question(s), showing good understanding that can be improved with more detail and clarity.`;
+          if (openEndedCorrect > 0) {
+            analysis += `Your open-ended responses showed strong analytical thinking in ${openEndedCorrect}/${openEndedTotal} questions. `;
           }
-          
-          if (correctOpenEnded > 0) {
-            analysis += ` Your ${correctOpenEnded} fully correct open-ended answer(s) demonstrate strong analytical and communication skills.`;
+          if (openEndedPartial > 0) {
+            analysis += `You partially understood ${openEndedPartial} open-ended concept${openEndedPartial > 1 ? 's' : ''} - work on providing more comprehensive explanations. `;
           }
-          
-          // Extract common weak areas from AI grading
-          const allWeakAreas = gradingResults.flatMap(r => r.weakAreas || []);
-          const uniqueWeakAreas = [...new Set(allWeakAreas)];
-          if (uniqueWeakAreas.length > 0) {
-            analysis += ` Key areas to focus on: ${uniqueWeakAreas.slice(0, 3).join(', ')}.`;
-          }
+        }
+
+        // Improvement suggestions
+        if (aiImprovements.length > 0) {
+          analysis += `To improve, consider focusing on: ${aiImprovements.slice(0, 2).join(' and ')}. `;
+        }
+
+        // Next steps recommendation
+        if (actualScore >= 80) {
+          analysis += `You're ready to tackle more challenging questions or explore advanced topics in ${quiz.topic}.`;
+        } else if (actualScore >= 60) {
+          analysis += `Review the concepts you missed and consider taking additional practice quizzes to solidify your understanding.`;
+        } else {
+          analysis += `I recommend reviewing the fundamental concepts of ${quiz.topic} before attempting more advanced material.`;
         }
       }
 
@@ -495,6 +520,10 @@ export default function QuizResultsPage() {
             <PerformanceAnalysis
               loadingAnalysis={loadingAnalysis}
               analysisText={analysisText}
+              quiz={quiz}
+              selectedAnswers={selectedAnswers}
+              gradingResults={gradingResults}
+              getAnswerGrade={getAnswerGrade}
             />
 
             {/* Quiz Results Actions - Different for guest vs authenticated users
