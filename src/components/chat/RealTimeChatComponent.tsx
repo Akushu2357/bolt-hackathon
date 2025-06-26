@@ -81,10 +81,11 @@ export default function RealTimeChatComponent({
     setMessages(prev => prev.filter(msg => !msg.metadata?.isTyping));
   }, []);
 
-  // Separate function to handle bot response
+  // Separate function to handle bot response - ลบ handleBotResponse จาก dependency
   const handleBotResponse = useCallback(async (messageText: string) => {
     if (isLoading) return;
 
+    console.log('Bot responding to:', messageText);
     setIsLoading(true);
     setError(null);
 
@@ -137,9 +138,9 @@ export default function RealTimeChatComponent({
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, sessionId, quizContext, onMessageSent, onQuizGenerated, messages]);
+  }, [isLoading, sessionId, quizContext, onMessageSent, onQuizGenerated]); // ลบ messages ออกจาก dependency
 
-  // Handle initial message from homepage - ปรับปรุงให้ทำงานได้ดีขึ้น
+  // Handle initial message from homepage - แยกออกมาเป็น useEffect ต่างหาก
   useEffect(() => {
     const state = location.state as {
       initialMessage?: string;
@@ -167,15 +168,16 @@ export default function RealTimeChatComponent({
       setMessages(prev => [...prev, userMessage]);
       onMessageSent?.(userMessage);
       
-      // จากนั้นให้ bot ตอบกลับ
-      setTimeout(() => {
-        handleBotResponse(state.initialMessage);
-      }, 100); // เพิ่ม delay เล็กน้อยเพื่อให้ state update เสร็จก่อน
-  
       // Clear state to prevent reuse
       window.history.replaceState({}, document.title);
+      
+      // ใช้ setTimeout เพื่อให้ state update เสร็จก่อน แล้วค่อยให้ bot ตอบ
+      setTimeout(() => {
+        console.log('Triggering bot response for:', state.initialMessage);
+        handleBotResponse(state.initialMessage);
+      }, 500); // เพิ่ม delay ให้มากขึ้นเพื่อให้แน่ใจว่า state update เสร็จแล้ว
     }
-  }, [location, hasProcessedInitialMessage, handleBotResponse, onMessageSent]);
+  }, [location.state, hasProcessedInitialMessage, onMessageSent, handleBotResponse]);
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
