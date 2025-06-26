@@ -49,7 +49,7 @@ export default function ChatPage() {
     }
   }, [user]);
 
-  // Handle initial message from HomePage - ปรับปรุงใหม่
+  // Handle initial message from HomePage - ปรับปรุงใหม่เพื่อป้องกันการเรียกซ้ำ
   useEffect(() => {
     if (initialMessageProcessed) return; // ป้องกันการทำงานซ้ำ
 
