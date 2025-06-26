@@ -62,7 +62,7 @@ export default function RealTimeChatComponent({
     inputRef.current?.focus();
   }, []);
 
-  // Update messages when initialMessages change and handle initial message processing
+  // Update messages when initialMessages change
   useEffect(() => {
     setMessages(initialMessages);
     
@@ -70,20 +70,14 @@ export default function RealTimeChatComponent({
     if (initialMessages.length > 0 && !hasProcessedInitialMessage) {
       const lastMessage = initialMessages[initialMessages.length - 1];
       
-      // If the last message is from user and has homepage_ ID (from HomePage)
+      // If the last message is from user and we haven't processed it yet
       if (lastMessage.role === 'user' && lastMessage.id.includes('homepage_')) {
         setHasProcessedInitialMessage(true);
-        
-        // 🎯 หัก chat usage เฉพาะ guest users เมื่อ process initial message จาก HomePage
-        if (!user) {
-          GuestLimitService.incrementUsage('chat');
-        }
-        
         // Trigger bot response for the initial message
         handleBotResponse(lastMessage.content);
       }
     }
-  }, [initialMessages, hasProcessedInitialMessage, user]);
+  }, [initialMessages, hasProcessedInitialMessage]);
 
   const addMessage = useCallback((message: ChatMessage) => {
     setMessages(prev => [...prev, message]);
@@ -106,7 +100,7 @@ export default function RealTimeChatComponent({
     setMessages(prev => [...prev, typingIndicator]);
 
     try {
-      // Create context from current messages (exclude typing indicator)
+      // Create context from current messages
       const contextMessages = messages.filter(msg => !msg.metadata?.isTyping).slice(-5);
       const context = contextMessages.map(msg => `${msg.role}: ${msg.content}`);
 
@@ -184,7 +178,6 @@ export default function RealTimeChatComponent({
     // Handle bot response
     await handleBotResponse(messageToSend);
 
-    // 🎯 หัก guest usage เฉพาะสำหรับ regular chat messages (ไม่ใช่ initial messages)
     if (!user) {
       GuestLimitService.incrementUsage('chat');
     }
