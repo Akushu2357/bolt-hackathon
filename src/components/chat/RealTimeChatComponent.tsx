@@ -19,8 +19,6 @@ import GuestLimitModal from '../common/GuestLimitModal';
 
 import { useLocation } from 'react-router-dom';
 
-
-
 interface RealTimeChatComponentProps {
   sessionId: string;
   initialMessages?: ChatMessage[];
@@ -51,16 +49,6 @@ export default function RealTimeChatComponent({
   // Auto-scroll to bottom when new messages arrive
   const messageContainerRef = useRef<HTMLDivElement>(null);
 
-  // Create refs for stable function references
-  const messagesRef = useRef<ChatMessage[]>(messages);
-  const addMessageRef = useRef<(message: ChatMessage) => void>();
-  const handleBotResponseRef = useRef<(messageText: string) => Promise<void>>();
-
-  // Update messages ref whenever messages change
-  useEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
-
   const scrollToBottom = () => {
     if (messageContainerRef.current) {
       messageContainerRef.current.scrollTop = messageContainerRef.current.scrollHeight;
@@ -89,11 +77,6 @@ export default function RealTimeChatComponent({
     onMessageSent?.(message);
   }, [onMessageSent]);
 
-  // Update addMessage ref
-  useEffect(() => {
-    addMessageRef.current = addMessage;
-  }, [addMessage]);
-
   const removeTypingIndicator = useCallback(() => {
     setMessages(prev => prev.filter(msg => !msg.metadata?.isTyping));
   }, []);
@@ -110,8 +93,8 @@ export default function RealTimeChatComponent({
     setMessages(prev => [...prev, typingIndicator]);
 
     try {
-      // Create context from current messages using ref to get latest state
-      const contextMessages = messagesRef.current.filter(msg => !msg.metadata?.isTyping).slice(-5);
+      // Create context from current messages
+      const contextMessages = messages.filter(msg => !msg.metadata?.isTyping).slice(-5);
       const context = contextMessages.map(msg => `${msg.role}: ${msg.content}`);
 
       if (quizContext) {
@@ -154,14 +137,9 @@ export default function RealTimeChatComponent({
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, sessionId, quizContext, onMessageSent, onQuizGenerated]);
+  }, [isLoading, sessionId, quizContext, onMessageSent, onQuizGenerated, messages]);
 
-  // Update handleBotResponse ref
-  useEffect(() => {
-    handleBotResponseRef.current = handleBotResponse;
-  }, [handleBotResponse]);
-
-  // Handle initial message from homepage
+  // Handle initial message from homepage - ปรับปรุงให้ทำงานได้ดีขึ้น
   useEffect(() => {
     const state = location.state as {
       initialMessage?: string;
@@ -171,10 +149,10 @@ export default function RealTimeChatComponent({
     if (
       state?.initialMessage &&
       state?.triggerBotResponse &&
-      !hasProcessedInitialMessage &&
-      addMessageRef.current &&
-      handleBotResponseRef.current
+      !hasProcessedInitialMessage
     ) {
+      console.log('Processing initial message from homepage:', state.initialMessage);
+      
       const userMessage: ChatMessage = {
         id: `homepage_${Date.now()}`,
         role: 'user',
@@ -184,28 +162,20 @@ export default function RealTimeChatComponent({
       };
   
       setHasProcessedInitialMessage(true);
-      addMessageRef.current(userMessage);
-      handleBotResponseRef.current(state.initialMessage);
+      
+      // เพิ่มข้อความของผู้ใช้ก่อน
+      setMessages(prev => [...prev, userMessage]);
+      onMessageSent?.(userMessage);
+      
+      // จากนั้นให้ bot ตอบกลับ
+      setTimeout(() => {
+        handleBotResponse(state.initialMessage);
+      }, 100); // เพิ่ม delay เล็กน้อยเพื่อให้ state update เสร็จก่อน
   
       // Clear state to prevent reuse
       window.history.replaceState({}, document.title);
     }
-  }, [location, hasProcessedInitialMessage]);
-
-  // Update messages when initialMessages change
-  useEffect(() => {
-    if (!hasProcessedInitialMessage && messages.length > 0 && handleBotResponseRef.current) {
-      const lastMessage = messages[messages.length - 1];
-      if (
-        lastMessage.role === 'user' &&
-        lastMessage.id.includes('homepage_') &&
-        !lastMessage.metadata?.processedFromHomepage
-      ) {
-        setHasProcessedInitialMessage(true);
-        handleBotResponseRef.current(lastMessage.content);
-      }
-    }
-  }, [messages, hasProcessedInitialMessage]);
+  }, [location, hasProcessedInitialMessage, handleBotResponse, onMessageSent]);
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
@@ -236,10 +206,8 @@ export default function RealTimeChatComponent({
     setMessages(prev => [...prev, userMessage]);
     onMessageSent?.(userMessage);
 
-    // Handle bot response using ref
-    if (handleBotResponseRef.current) {
-      await handleBotResponseRef.current(messageToSend);
-    }
+    // Handle bot response
+    await handleBotResponse(messageToSend);
 
     if (!user) {
       GuestLimitService.incrementUsage('chat');
