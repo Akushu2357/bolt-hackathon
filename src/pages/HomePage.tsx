@@ -213,15 +213,27 @@ export default function HomePage() {
             content: chatInput
           });
 
-        navigate('/chat');
+        // Navigate to chat with the session ID and trigger bot response
+        navigate(`/chat/${newSession.id}`, {
+          state: {
+            initialMessage: chatInput,
+            triggerBotResponse: true
+          }
+        });
       } else {
-        // For logged-out users, navigate to chat with query parameter
-        navigate(`/chat?message=${encodeURIComponent(chatInput)}`);
+        // For guest users, navigate to chat with the message in state
+        navigate('/chat', {
+          state: {
+            initialMessage: chatInput,
+            triggerBotResponse: true
+          }
+        });
       }
     } catch (error) {
       console.error('Error creating chat session:', error);
     } finally {
       setChatLoading(false);
+      setChatInput(''); // Clear input after successful submission
     }
   };
 

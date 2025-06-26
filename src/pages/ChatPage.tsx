@@ -48,106 +48,130 @@ export default function ChatPage() {
     }
   }, [user]);
 
-  // Handle quiz integration from location state or stored context
+  // Handle initial message from HomePage and trigger bot response
   useEffect(() => {
-  const { state } = location as {
-    state?: {
-      fromQuiz?: boolean;
-      quizContext?: QuizChatContext;
-      initialMessage?: string;
+    const { state } = location as {
+      state?: {
+        fromQuiz?: boolean;
+        quizContext?: QuizChatContext;
+        initialMessage?: string;
+        triggerBotResponse?: boolean;
+      };
     };
-  };
 
-  // Case 1: ทั้ง quizContext และ initialMessage
-  if (state?.fromQuiz) {
-    if (state.quizContext) {
-      setQuizContext(state.quizContext);
-      setShowQuizBanner(true);
-    }
-
-    if (state.initialMessage) {
+    // Case 1: From HomePage with initial message and trigger bot response
+    if (state?.initialMessage && state?.triggerBotResponse) {
       const userMessage: ChatMessage = {
-        id: `quiz_initial_${Date.now()}`,
+        id: `homepage_${Date.now()}`,
         role: 'user',
         content: state.initialMessage,
         timestamp: new Date().toISOString(),
         type: 'text',
       };
+
       setMessages([userMessage]);
-    } else if (state.quizContext) {
-      // ถ้าไม่มี initialMessage แต่มี context → สร้างให้
-      const autoMessage = QuizChatIntegrationService.createInitialChatMessage(state.quizContext);
+      
+      // Trigger bot response automatically
+      handleSendMessageFromHomePage(state.initialMessage);
+      
+      // Clear state to prevent re-triggering
+      navigate(location.pathname, { replace: true });
+      return;
+    }
+
+    // Case 2: From quiz with context
+    if (state?.fromQuiz) {
+      if (state.quizContext) {
+        setQuizContext(state.quizContext);
+        setShowQuizBanner(true);
+      }
+
+      if (state.initialMessage) {
+        const userMessage: ChatMessage = {
+          id: `quiz_initial_${Date.now()}`,
+          role: 'user',
+          content: state.initialMessage,
+          timestamp: new Date().toISOString(),
+          type: 'text',
+        };
+        setMessages([userMessage]);
+      } else if (state.quizContext) {
+        const autoMessage = QuizChatIntegrationService.createInitialChatMessage(state.quizContext);
+        const userMessage: ChatMessage = {
+          id: `quiz_auto_${Date.now()}`,
+          role: 'user',
+          content: autoMessage,
+          timestamp: new Date().toISOString(),
+          type: 'text',
+        };
+        setMessages([userMessage]);
+      }
+
+      navigate(location.pathname, { replace: true });
+      return;
+    }
+
+    // Case 3: Stored context from previous session
+    const storedContext = QuizChatIntegrationService.getAndClearQuizContext();
+    if (storedContext) {
+      setQuizContext(storedContext);
+      setShowQuizBanner(true);
+
+      const autoMessage = QuizChatIntegrationService.createInitialChatMessage(storedContext);
       const userMessage: ChatMessage = {
-        id: `quiz_auto_${Date.now()}`,
+        id: `quiz_stored_${Date.now()}`,
         role: 'user',
         content: autoMessage,
         timestamp: new Date().toISOString(),
         type: 'text',
       };
       setMessages([userMessage]);
+      return;
     }
 
-    // ล้าง state
-    navigate(location.pathname, { replace: true });
-    return;
-  }
+    // Case 4: Guest with URL param (legacy support)
+    const urlParams = new URLSearchParams(location.search);
+    const urlInitialMessage = urlParams.get('message');
 
-  // Case 2: มี context ที่เคยเก็บไว้
-  const storedContext = QuizChatIntegrationService.getAndClearQuizContext();
-  if (storedContext) {
-    setQuizContext(storedContext);
-    setShowQuizBanner(true);
+    if (urlInitialMessage && !user) {
+      const userMessage: ChatMessage = {
+        id: `initial_${Date.now()}`,
+        role: 'user',
+        content: urlInitialMessage,
+        timestamp: new Date().toISOString(),
+        type: 'text',
+      };
+      setMessages([userMessage]);
 
-    const autoMessage = QuizChatIntegrationService.createInitialChatMessage(storedContext);
-    const userMessage: ChatMessage = {
-      id: `quiz_stored_${Date.now()}`,
-      role: 'user',
-      content: autoMessage,
-      timestamp: new Date().toISOString(),
-      type: 'text',
-    };
-    setMessages([userMessage]);
-    return;
-  }
+      handleMessageSent(userMessage);
+      handleSendMessageFromHomePage(urlInitialMessage);
 
-  // Case 3: Guest ผ่าน URL param
-  const urlParams = new URLSearchParams(location.search);
-  const urlInitialMessage = urlParams.get('message');
+      navigate('/chat', { replace: true });
+    }
+  }, [location, navigate, user, setMessages]);
 
-  if (urlInitialMessage && !user) {
-    const userMessage: ChatMessage = {
-      id: `initial_${Date.now()}`,
-      role: 'user',
-      content: urlInitialMessage,
-      timestamp: new Date().toISOString(),
-      type: 'text',
-    };
-    setMessages([userMessage]);
-
-    handleMessageSent(userMessage);
-    handleSendMessage(urlInitialMessage);
-
-    navigate('/chat', { replace: true });
-  }
-}, [location, navigate, user, setMessages]);
-
-  const handleSendMessage = async (text: string) => {
-    const userMessage: ChatMessage = {
-      id: `msg_${Date.now()}`,
-      role: 'user',
-      content: text,
-      timestamp: new Date().toISOString(),
-      type: 'text',
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    await saveMessage(userMessage); // ถ้าใช้ Supabase
-
+  // Function to handle sending message from HomePage and getting bot response
+  const handleSendMessageFromHomePage = async (text: string) => {
     try {
-      const botReply = await ChatApiService.sendMessage(text, activeSessionId || 'guest');
+      // Create context for the message
+      const context = quizContext 
+        ? [`Quiz context: User completed a ${quizContext.topic} quiz (${quizContext.difficulty} difficulty) with ${quizContext.score}% score. Weak areas: ${quizContext.weakAreas.join(', ')}`]
+        : [];
+
+      // Send to AI and get response
+      const botReply = await ChatApiService.sendMessage(text, activeSessionId || 'guest', context);
+      
+      // Add bot response to messages
       setMessages(prev => [...prev, botReply]);
-      await saveMessage(botReply);
+      
+      // Save both messages if user is authenticated
+      if (user && activeSessionId) {
+        await saveMessage(botReply);
+      }
     } catch (error) {
+      console.error('Error getting bot response:', error);
+      
+      // Add error message
       const errorMessage: ChatMessage = {
         id: `error_${Date.now()}`,
         role: 'assistant',
@@ -155,6 +179,7 @@ export default function ChatPage() {
         timestamp: new Date().toISOString(),
         type: 'error',
       };
+      
       setMessages(prev => [...prev, errorMessage]);
     }
   };
