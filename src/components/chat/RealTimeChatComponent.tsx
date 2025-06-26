@@ -64,7 +64,15 @@ export default function RealTimeChatComponent({
 
   // Update messages when initialMessages change
   useEffect(() => {
-    setMessages(initialMessages);
+    if (messages.length === 0 && initialMessages.length > 0) {
+      setMessages(initialMessages);
+  
+      const lastMessage = initialMessages[initialMessages.length - 1];
+      if (lastMessage.role === 'user' && lastMessage.id.includes('homepage_') && !hasProcessedInitialMessage) {
+        setHasProcessedInitialMessage(true);
+        handleBotResponse(lastMessage.content);
+      }
+    }
     
     // Check if we have a new initial message that needs bot response
     if (initialMessages.length > 0 && !hasProcessedInitialMessage) {
