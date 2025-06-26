@@ -41,7 +41,6 @@ export default function RealTimeChatComponent({
   const [showCommands, setShowCommands] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [botResponseProcessed, setBotResponseProcessed] = useState(false);
-  const [hasProcessedInitialMessage, setHasProcessedInitialMessage] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -64,24 +63,30 @@ export default function RealTimeChatComponent({
   }, []);
 
   // Update messages when initialMessages change
-  // Set initial messages only if messages is still empty
   useEffect(() => {
-    if (messages.length === 0 && initialMessages.length > 0) {
+    if (initialMessages.length > 0) {
+      console.log('Setting initial messages:', initialMessages);
       setMessages(initialMessages);
     }
   }, [initialMessages]);
   
-  // Process bot response for homepage message
+  // Process bot response for homepage message - แก้ไขใหม่
   useEffect(() => {
-    if (messages.length > 0 && !hasProcessedInitialMessage) {
+    if (messages.length > 0 && !botResponseProcessed) {
       const lastMessage = messages[messages.length - 1];
+      
+      // ตรวจสอบว่าเป็นข้อความจาก homepage หรือไม่
       if (lastMessage.role === 'user' && lastMessage.id.includes('homepage_')) {
-        setHasProcessedInitialMessage(true);
-        handleBotResponse(lastMessage.content);
+        console.log('Processing bot response for homepage message:', lastMessage.content);
+        setBotResponseProcessed(true);
+        
+        // รอ 1 วินาทีแล้วค่อยให้ bot ตอบ เพื่อให้ UI render เสร็จก่อน
+        setTimeout(() => {
+          handleBotResponse(lastMessage.content);
+        }, 1000);
       }
     }
-  }, [messages, hasProcessedInitialMessage]);
-
+  }, [messages, botResponseProcessed]);
 
   const addMessage = useCallback((message: ChatMessage) => {
     setMessages(prev => [...prev, message]);
