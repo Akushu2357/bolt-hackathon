@@ -64,7 +64,7 @@ export default function RealTimeChatComponent({
 
   // Update messages when initialMessages change
   useEffect(() => {
-    if (initialMessages.length > 0) {
+    if (initialMessages.length > 0 && initialMessages.length > 0) {
       console.log('Setting initial messages:', initialMessages);
       setMessages(initialMessages);
     }
