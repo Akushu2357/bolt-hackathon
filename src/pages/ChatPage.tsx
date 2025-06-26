@@ -67,11 +67,7 @@ export default function ChatPage() {
         content: state.initialMessage,
         timestamp: new Date().toISOString(),
         type: 'text',
-        metadata: {
-          processedFromHomepage: true
-        }
       };
-      setMessages([userMessage]);
 
       // Set the user message for RealTimeChatComponent to process
       setMessages([userMessage]);
