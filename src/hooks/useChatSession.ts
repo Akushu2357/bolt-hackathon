@@ -76,7 +76,10 @@ export function useChatSession(sessionId?: string) {
       const savedMessages = localStorage.getItem('guestMessages');
       if (savedMessages) {
         const parsedMessages = JSON.parse(savedMessages);
-        setMessages(parsedMessages);
+        // Validate that parsed messages are in correct format
+        if (Array.isArray(parsedMessages)) {
+          setMessages(parsedMessages);
+        }
       }
     } catch (err) {
       console.error('Error loading guest messages:', err);

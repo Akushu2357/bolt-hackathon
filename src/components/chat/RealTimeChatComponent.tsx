@@ -74,21 +74,64 @@ export default function RealTimeChatComponent({
     }
   }, [location, navigate]);
 
+  // Load guest messages on mount for guest users
+  useEffect(() => {
+    if (!user && messages.length === 0) {
+      try {
+        const savedMessages = localStorage.getItem('guestMessages');
+        if (savedMessages) {
+          const parsedMessages = JSON.parse(savedMessages);
+          if (Array.isArray(parsedMessages)) {
+            setMessages(parsedMessages);
+          }
+        }
+      } catch (err) {
+        console.error('Error loading guest messages:', err);
+      }
+    }
+  }, [user, messages.length]);
+
   // Update messages when initialMessages change
   useEffect(() => {
     if (initialMessages.length > 0 && messages.length === 0) {
       setMessages(initialMessages);
     }
-  }, [initialMessages]);
+  }, [initialMessages, messages.length]);
 
   const addMessage = useCallback((message: ChatMessage) => {
-    setMessages(prev => [...prev, message]);
+    setMessages(prev => {
+      const newMessages = [...prev, message];
+      
+      // Save to localStorage for guest users
+      if (!user) {
+        try {
+          localStorage.setItem('guestMessages', JSON.stringify(newMessages));
+        } catch (err) {
+          console.error('Error saving guest messages:', err);
+        }
+      }
+      
+      return newMessages;
+    });
     onMessageSent?.(message);
-  }, [onMessageSent]);
+  }, [onMessageSent, user]);
 
   const removeTypingIndicator = useCallback(() => {
-    setMessages(prev => prev.filter(msg => !msg.metadata?.isTyping));
-  }, []);
+    setMessages(prev => {
+      const filtered = prev.filter(msg => !msg.metadata?.isTyping);
+      
+      // Update localStorage for guest users
+      if (!user) {
+        try {
+          localStorage.setItem('guestMessages', JSON.stringify(filtered));
+        } catch (err) {
+          console.error('Error updating guest messages:', err);
+        }
+      }
+      
+      return filtered;
+    });
+  }, [user]);
 
   // Handle bot response
   const handleBotResponse = async (messageText: string) => {
@@ -116,11 +159,23 @@ export default function RealTimeChatComponent({
         context
       );
 
-      // Remove typing indicator
-      setMessages(prev => prev.filter(msg => !msg.metadata?.isTyping));
+      // Remove typing indicator and add assistant response
+      setMessages(prev => {
+        const filtered = prev.filter(msg => !msg.metadata?.isTyping);
+        const newMessages = [...filtered, assistantMessage];
+        
+        // Save to localStorage for guest users
+        if (!user) {
+          try {
+            localStorage.setItem('guestMessages', JSON.stringify(newMessages));
+          } catch (err) {
+            console.error('Error saving guest messages:', err);
+          }
+        }
+        
+        return newMessages;
+      });
 
-      // Add assistant response
-      setMessages(prev => [...prev, assistantMessage]);
       onMessageSent?.(assistantMessage);
 
       if (assistantMessage.type === 'quiz' && assistantMessage.metadata?.quizId) {
@@ -130,8 +185,7 @@ export default function RealTimeChatComponent({
     } catch (error) {
       console.error('Error getting bot response:', error);
 
-      setMessages(prev => prev.filter(msg => !msg.metadata?.isTyping));
-
+      // Remove typing indicator and add error message
       const errorMessage: ChatMessage = {
         id: `error_${Date.now()}`,
         role: 'assistant',
@@ -141,7 +195,22 @@ export default function RealTimeChatComponent({
         metadata: { error: error instanceof Error ? error.message : 'Unknown error' }
       };
 
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages(prev => {
+        const filtered = prev.filter(msg => !msg.metadata?.isTyping);
+        const newMessages = [...filtered, errorMessage];
+        
+        // Save to localStorage for guest users
+        if (!user) {
+          try {
+            localStorage.setItem('guestMessages', JSON.stringify(newMessages));
+          } catch (err) {
+            console.error('Error saving guest messages:', err);
+          }
+        }
+        
+        return newMessages;
+      });
+
       setError(error instanceof Error ? error.message : 'Failed to get response');
     } finally {
       setIsLoading(false);
@@ -174,8 +243,7 @@ export default function RealTimeChatComponent({
     setError(null);
 
     // Add user message
-    setMessages(prev => [...prev, userMessage]);
-    onMessageSent?.(userMessage);
+    addMessage(userMessage);
 
     // Handle bot response
     await handleBotResponse(messageToSend);
