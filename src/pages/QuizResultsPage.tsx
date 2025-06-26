@@ -496,7 +496,7 @@ export default function QuizResultsPage() {
               analysisText={analysisText}
             />
 
-            {/* Quiz Results Actions - Different for guest vs authenticated users */}
+            {/* Quiz Results Actions - Different for guest vs authenticated users
             <div className="mb-6 sm:mb-8">
               {user ? (
                 <QuizResultsActions
@@ -512,7 +512,7 @@ export default function QuizResultsPage() {
                   onRetakeQuiz={retakeQuiz}
                 />
               )}
-            </div>
+            </div> */}
             
             {showAnswers && user && (
               <DetailedReview

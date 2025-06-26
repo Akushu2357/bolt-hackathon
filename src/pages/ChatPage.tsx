@@ -7,7 +7,7 @@ import RealTimeChatComponent from '../components/chat/RealTimeChatComponent';
 import QuizContextBanner from '../components/chat/QuizContextBanner';
 import QuizSuggestedPrompts from '../components/chat/QuizSuggestedPrompts';
 import { useChatSession } from '../hooks/useChatSession';
-import { ChatMessage } from '../services/chatApiService';
+import { ChatApiService, ChatMessage } from '../services/chatApiService';
 import { QuizChatIntegrationService, QuizChatContext } from '../services/quizChatIntegrationService';
 
 interface ChatSession {
@@ -123,11 +123,42 @@ export default function ChatPage() {
       type: 'text',
     };
     setMessages([userMessage]);
+
+    handleMessageSent(userMessage);
+    handleSendMessage(urlInitialMessage);
+
     navigate('/chat', { replace: true });
   }
 }, [location, navigate, user, setMessages]);
 
-  
+  const handleSendMessage = async (text: string) => {
+    const userMessage: ChatMessage = {
+      id: `msg_${Date.now()}`,
+      role: 'user',
+      content: text,
+      timestamp: new Date().toISOString(),
+      type: 'text',
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    await saveMessage(userMessage); // ถ้าใช้ Supabase
+
+    try {
+      const botReply = await ChatApiService.sendMessage(text, activeSessionId || 'guest');
+      setMessages(prev => [...prev, botReply]);
+      await saveMessage(botReply);
+    } catch (error) {
+      const errorMessage: ChatMessage = {
+        id: `error_${Date.now()}`,
+        role: 'assistant',
+        content: `❌ Sorry, I encountered an error: ${(error as Error).message}`,
+        timestamp: new Date().toISOString(),
+        type: 'error',
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    }
+  };
+
   const fetchSessions = async () => {
     if (!user) return;
 
@@ -258,10 +289,9 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="min-h-screen overflow-hidden bg-gray-50">
+    <div className="h-screen overflow-hidden bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
-<div className="flex h-full max-h-[calc(100vh-8rem)] sm:max-h-[calc(100vh-12rem)] bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          
+        <div className="flex h-full max-h-[calc(100vh-8rem)] sm:max-h-[calc(100vh-12rem)] bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           {/* Sidebar - Only show for logged-in users */}
           {user && (
             <div className={`${showSidebar ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 fixed lg:relative inset-y-0 left-0 z-50 w-80 bg-white border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out lg:transition-none`}>
@@ -353,66 +383,61 @@ export default function ChatPage() {
           )}
 
           {/* Chat Area */}
-<div className="flex-1 flex flex-col overflow-hidden">
-  {sessionError ? (
-    <div className="flex-1 flex items-center justify-center">
-      <div className="text-center">
-        <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <MessageCircle className="w-6 h-6 text-red-600" />
-        </div>
-        <h3 className="text-lg font-medium text-gray-900 mb-2">
-          Error Loading Chat
-        </h3>
-        <p className="text-gray-600 mb-4">{sessionError}</p>
-        <button
-          onClick={() => window.location.reload()}
-          className="btn-primary"
-        >
-          Retry
-        </button>
-      </div>
-    </div>
-  ) : (
-    <>
-      {/* Quiz Context Banner (Fixed) */}
-      {showQuizBanner && quizContext && (
-        <div className="shrink-0 p-4 border-b border-gray-200 bg-white">
-          <QuizContextBanner
-            quizContext={quizContext}
-            onDismiss={handleDismissQuizBanner}
-          />
-        </div>
-      )}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {sessionError ? (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <MessageCircle className="w-6 h-6 text-red-600" />
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    Error Loading Chat
+                  </h3>
+                  <p className="text-gray-600 mb-4">{sessionError}</p>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="btn-primary"
+                  >
+                    Retry
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Quiz Context Banner (Fixed) */}
+                {showQuizBanner && quizContext && (
+                  <div className="shrink-0 p-4 border-b border-gray-200 bg-white">
+                    <QuizContextBanner
+                      quizContext={quizContext}
+                      onDismiss={handleDismissQuizBanner}
+                    />
+                  </div>
+                )}
 
-      {/* Quiz Suggested Prompts (Fixed) */}
-      {quizContext && messages.length === 0 && (
-        <div className="shrink-0 p-4 border-b border-gray-200 bg-white">
-          <QuizSuggestedPrompts
-            quizContext={quizContext}
-            onPromptSelect={handlePromptSelect}
-          />
-        </div>
-      )}
+                {/* Quiz Suggested Prompts (Fixed) */}
+                {quizContext && messages.length === 0 && (
+                  <div className="shrink-0 p-4 border-b border-gray-200 bg-white">
+                    <QuizSuggestedPrompts
+                      quizContext={quizContext}
+                      onPromptSelect={handlePromptSelect}
+                    />
+                  </div>
+                )}
 
-      {/* Chat Messages (Scrollable) */}
-      <div className="flex-1 overflow-y-auto px-4 py-2 space-y-2 bg-white">
-        <RealTimeChatComponent
-          sessionId={activeSessionId || 'guest'}
-          initialMessages={messages}
-          onMessageSent={handleMessageSent}
-          onQuizGenerated={handleQuizGenerated}
-          quizContext={quizContext}
-        />
-      </div>
+                {/* Chat Messages (Scrollable) */}
+                <div className="flex-1 overflow-y-auto px-4 py-2 space-y-2 bg-white">
+                  <RealTimeChatComponent
+                    sessionId={activeSessionId || 'guest'}
+                    initialMessages={messages}
+                    onMessageSent={handleMessageSent}
+                    onQuizGenerated={handleQuizGenerated}
+                    quizContext={quizContext}
+                  />
+                </div>
 
-      {/* Chat Input (Fixed) - ต้องใส่ไว้ใน RealTimeChatComponent หรือแยกมาไว้ตรงนี้ถ้าอยาก fix จริงๆ) */}
-      {/* <div className="shrink-0 px-4 py-3 border-t border-gray-200 bg-white">
-        <ChatInput ... />
-      </div> */}
-    </>
-  )}
-</div>
-
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
