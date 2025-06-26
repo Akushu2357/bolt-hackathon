@@ -28,7 +28,6 @@ export default function ChatPage() {
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>(sessionId);
   const [quizContext, setQuizContext] = useState<QuizChatContext | null>(null);
   const [showQuizBanner, setShowQuizBanner] = useState(false);
-  const [initialMessageProcessed, setInitialMessageProcessed] = useState(false);
 
   const {
     currentSession,
@@ -49,74 +48,35 @@ export default function ChatPage() {
     }
   }, [user]);
 
-  // Handle initial message from HomePage - ปรับปรุงใหม่เพื่อป้องกันการเรียกซ้ำ
+  // Handle quiz integration from navigation state
   useEffect(() => {
-    if (initialMessageProcessed) return; // ป้องกันการทำงานซ้ำ
-
     const { state } = location as {
       state?: {
         fromQuiz?: boolean;
         quizContext?: QuizChatContext;
-        initialMessage?: string;
-        triggerBotResponse?: boolean;
       };
     };
 
-    // Case 1: From HomePage with initial message
-    if (state?.initialMessage && state?.triggerBotResponse) {
-      console.log('Processing initial message from homepage:', state.initialMessage);
-      
+    // Handle quiz context from navigation state
+    if (state?.fromQuiz && state?.quizContext) {
+      setQuizContext(state.quizContext);
+      setShowQuizBanner(true);
+
+      const autoMessage = QuizChatIntegrationService.createInitialChatMessage(state.quizContext);
       const userMessage: ChatMessage = {
-        id: `homepage_${Date.now()}`,
+        id: `quiz_auto_${Date.now()}`,
         role: 'user',
-        content: state.initialMessage,
+        content: autoMessage,
         timestamp: new Date().toISOString(),
         type: 'text',
       };
-
       setMessages([userMessage]);
-      setInitialMessageProcessed(true);
-      
-      // Clear state ทันทีเพื่อป้องกันการทำงานซ้ำ
-      navigate(location.pathname, { replace: true });
-      return;
-    }
-
-    // Case 2: From quiz with context
-    if (state?.fromQuiz) {
-      if (state.quizContext) {
-        setQuizContext(state.quizContext);
-        setShowQuizBanner(true);
-      }
-
-      if (state.initialMessage) {
-        const userMessage: ChatMessage = {
-          id: `quiz_initial_${Date.now()}`,
-          role: 'user',
-          content: state.initialMessage,
-          timestamp: new Date().toISOString(),
-          type: 'text',
-        };
-        setMessages([userMessage]);
-        setInitialMessageProcessed(true);
-      } else if (state.quizContext) {
-        const autoMessage = QuizChatIntegrationService.createInitialChatMessage(state.quizContext);
-        const userMessage: ChatMessage = {
-          id: `quiz_auto_${Date.now()}`,
-          role: 'user',
-          content: autoMessage,
-          timestamp: new Date().toISOString(),
-          type: 'text',
-        };
-        setMessages([userMessage]);
-        setInitialMessageProcessed(true);
-      }
 
       navigate(location.pathname, { replace: true });
       return;
     }
 
-    // Case 3: Stored context from previous session
+    // Handle stored context from previous session
     const storedContext = QuizChatIntegrationService.getAndClearQuizContext();
     if (storedContext) {
       setQuizContext(storedContext);
@@ -131,27 +91,8 @@ export default function ChatPage() {
         type: 'text',
       };
       setMessages([userMessage]);
-      setInitialMessageProcessed(true);
-      return;
     }
-
-    // Case 4: Guest with URL param (legacy support)
-    const urlParams = new URLSearchParams(location.search);
-    const urlInitialMessage = urlParams.get('message');
-
-    if (urlInitialMessage && !user) {
-      const userMessage: ChatMessage = {
-        id: `initial_${Date.now()}`,
-        role: 'user',
-        content: urlInitialMessage,
-        timestamp: new Date().toISOString(),
-        type: 'text',
-      };
-      setMessages([userMessage]);
-      setInitialMessageProcessed(true);
-      navigate('/chat', { replace: true });
-    }
-  }, [location, navigate, user, setMessages, initialMessageProcessed]);
+  }, [location, navigate, setMessages]);
 
   const fetchSessions = async () => {
     if (!user) return;

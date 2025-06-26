@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
   Send, 
@@ -34,13 +34,13 @@ export default function RealTimeChatComponent({
 }: RealTimeChatComponentProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showCommands, setShowCommands] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
-  const [botResponseProcessed, setBotResponseProcessed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -62,30 +62,24 @@ export default function RealTimeChatComponent({
     inputRef.current?.focus();
   }, []);
 
-  // Update messages when initialMessages change and process bot response
+  // Handle prefilled message from URL parameter
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.search);
+    const prefilledMessage = urlParams.get('prefill');
+    
+    if (prefilledMessage) {
+      setInputMessage(decodeURIComponent(prefilledMessage));
+      // Clear the URL parameter
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location, navigate]);
+
+  // Update messages when initialMessages change
   useEffect(() => {
     if (initialMessages.length > 0) {
-      console.log('Setting initial messages:', initialMessages);
       setMessages(initialMessages);
-      
-      // ตรวจสอบว่าต้องให้ bot ตอบหรือไม่ (เฉพาะข้อความจาก homepage)
-      const lastMessage = initialMessages[initialMessages.length - 1];
-      if (
-        lastMessage && 
-        lastMessage.role === 'user' && 
-        lastMessage.id.includes('homepage_') && 
-        !botResponseProcessed
-      ) {
-        console.log('Processing bot response for homepage message:', lastMessage.content);
-        setBotResponseProcessed(true);
-        
-        // รอให้ UI render เสร็จก่อนแล้วค่อยให้ bot ตอบ
-        setTimeout(() => {
-          handleBotResponse(lastMessage.content);
-        }, 500);
-      }
     }
-  }, [initialMessages, botResponseProcessed]);
+  }, [initialMessages]);
 
   const addMessage = useCallback((message: ChatMessage) => {
     setMessages(prev => [...prev, message]);
@@ -96,11 +90,10 @@ export default function RealTimeChatComponent({
     setMessages(prev => prev.filter(msg => !msg.metadata?.isTyping));
   }, []);
 
-  // Separate function to handle bot response
+  // Handle bot response
   const handleBotResponse = async (messageText: string) => {
     if (isLoading) return;
 
-    console.log('Starting bot response for:', messageText);
     setIsLoading(true);
     setError(null);
 
@@ -133,8 +126,6 @@ export default function RealTimeChatComponent({
       if (assistantMessage.type === 'quiz' && assistantMessage.metadata?.quizId) {
         onQuizGenerated?.(assistantMessage.metadata.quizId);
       }
-
-      console.log('Bot response completed successfully');
 
     } catch (error) {
       console.error('Error getting bot response:', error);
