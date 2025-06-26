@@ -68,16 +68,20 @@ export default function RealTimeChatComponent({
     }
   }, [initialMessages]);
 
+
   // Update messages when initialMessages change
   useEffect(() => {
-      if (messages.length > 0 && !hasProcessedInitialMessage) {
+    if (!hasProcessedInitialMessage && messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
-      if (lastMessage.role === 'user' && lastMessage.id.includes('homepage_')) {
+      if (
+        lastMessage.role === 'user' &&
+        lastMessage.id.includes('homepage_')
+      ) {
         setHasProcessedInitialMessage(true);
         handleBotResponse(lastMessage.content);
       }
     }
-  }, [initialMessages, hasProcessedInitialMessage]);
+  }, [messages, hasProcessedInitialMessage]);
 
   const addMessage = useCallback((message: ChatMessage) => {
     setMessages(prev => [...prev, message]);
