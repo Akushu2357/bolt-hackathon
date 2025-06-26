@@ -53,35 +53,6 @@ export default function RealTimeChatComponent({
     }
   };
 
-  const LOCAL_STORAGE_KEY = `guest_chat_messages_${sessionId}`;
-
-  // โหลดข้อความจาก localStorage ถ้าเป็น guest
-  useEffect(() => {
-    if (!user) {
-      const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved) as ChatMessage[];
-          if (parsed.length > 0 && messages.length === 0) {
-            setMessages(parsed);
-          }
-        } catch (e) {
-          console.error("Failed to parse guest messages:", e);
-        }
-      }
-    } else {
-      localStorage.removeItem(LOCAL_STORAGE_KEY);
-    }
-  }, [user, sessionId]);
-  
-  // บันทึกลง localStorage ทุกครั้งที่ messages เปลี่ยน (เฉพาะ guest)
-  useEffect(() => {
-    if (!user) {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(messages));
-    }
-  }, [messages, user, sessionId]);
-
-
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
