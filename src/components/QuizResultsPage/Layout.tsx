@@ -13,6 +13,7 @@ import {
   LogIn,
   BookOpen
 } from 'lucide-react';
+import Footer from '../common/Footer';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -40,7 +41,7 @@ export default function Layout({ children }: LayoutProps) {
   const isActive = (path: string) => location.pathname === path;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -219,6 +220,9 @@ export default function Layout({ children }: LayoutProps) {
       <main className="flex-1">
         {children}
       </main>
+
+      {/* Footer */}
+      <Footer />
     </div>
   );
 }
