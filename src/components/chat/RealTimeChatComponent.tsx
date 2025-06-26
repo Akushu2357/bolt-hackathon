@@ -40,7 +40,7 @@ export default function RealTimeChatComponent({
   const [error, setError] = useState<string | null>(null);
   const [showCommands, setShowCommands] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
-  const [hasProcessedInitialMessage, setHasProcessedInitialMessage] = useState(false);
+  const [processedMessageIds, setProcessedMessageIds] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -67,12 +67,16 @@ export default function RealTimeChatComponent({
     setMessages(initialMessages);
     
     // Check if we have a new initial message that needs bot response
-    if (initialMessages.length > 0 && !hasProcessedInitialMessage) {
+    if (initialMessages.length > 0) {
       const lastMessage = initialMessages[initialMessages.length - 1];
       
-      // If the last message is from user and has homepage_ ID (from HomePage)
-      if (lastMessage.role === 'user' && lastMessage.id.includes('homepage_')) {
-        setHasProcessedInitialMessage(true);
+      // If the last message is from user and has homepage_ ID and hasn't been processed
+      if (lastMessage.role === 'user' && 
+          lastMessage.id.includes('homepage_') && 
+          !processedMessageIds.has(lastMessage.id)) {
+        
+        // Mark this message as processed
+        setProcessedMessageIds(prev => new Set([...prev, lastMessage.id]));
         
         // 🎯 หัก chat usage เฉพาะ guest users เมื่อ process initial message จาก HomePage
         if (!user) {
@@ -83,7 +87,7 @@ export default function RealTimeChatComponent({
         handleBotResponse(lastMessage.content);
       }
     }
-  }, [initialMessages, hasProcessedInitialMessage, user]);
+  }, [initialMessages, user, processedMessageIds]);
 
   const addMessage = useCallback((message: ChatMessage) => {
     setMessages(prev => [...prev, message]);
@@ -121,7 +125,7 @@ export default function RealTimeChatComponent({
       );
 
       // Remove typing indicator
-      setMessages(prev => prev.filter(msg => !msg.metadata?.isTyping));
+      removeTypingIndicator();
 
       // Add assistant response
       setMessages(prev => [...prev, assistantMessage]);
@@ -134,7 +138,7 @@ export default function RealTimeChatComponent({
     } catch (error) {
       console.error('Error getting bot response:', error);
 
-      setMessages(prev => prev.filter(msg => !msg.metadata?.isTyping));
+      removeTypingIndicator();
 
       const errorMessage: ChatMessage = {
         id: `error_${Date.now()}`,
@@ -474,6 +478,7 @@ export default function RealTimeChatComponent({
               ) : (
                 <Send className="w-4 h-4" />
               )}
+              <span>{isLoading ? 'Starting...' : 'Ask'}</span>
             </button>
           </div>
           
