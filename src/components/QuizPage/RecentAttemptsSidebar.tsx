@@ -5,6 +5,26 @@ interface RecentAttemptsSidebarProps {
   attempts: any[];
 }
 
+const formatRelativeTime = (date: string | Date) => {
+  const now = new Date();
+  const attemptDate = new Date(date);
+  const diffInMs = now.getTime() - attemptDate.getTime();
+  const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+  const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
+  const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+
+  if (diffInDays >= 1) {
+    // Show full date if more than 24 hours ago
+    return `${attemptDate.toLocaleDateString()} at ${attemptDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  } else if (diffInHours >= 1) {
+    return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
+  } else if (diffInMinutes >= 1) {
+    return `${diffInMinutes} minute${diffInMinutes > 1 ? 's' : ''} ago`;
+  } else {
+    return 'Just now';
+  }
+};
+
 const RecentAttemptsSidebar: React.FC<RecentAttemptsSidebarProps> = ({ attempts }) => (
   <div className="hidden lg:block lg:w-80">
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
@@ -43,7 +63,7 @@ const RecentAttemptsSidebar: React.FC<RecentAttemptsSidebarProps> = ({ attempts 
                 </div>
               </div>
               <p className="text-xs text-gray-500">
-                {new Date(attempt.completed_at).toLocaleDateString()} at {new Date(attempt.completed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {formatRelativeTime(attempt.completed_at)}
               </p>
             </div>
           ))}
