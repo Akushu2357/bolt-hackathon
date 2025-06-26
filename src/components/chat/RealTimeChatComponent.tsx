@@ -75,7 +75,8 @@ export default function RealTimeChatComponent({
       const lastMessage = messages[messages.length - 1];
       if (
         lastMessage.role === 'user' &&
-        lastMessage.id.includes('homepage_')
+        lastMessage.id.includes('homepage_') &&
+        !lastMessage.metadata?.processedFromHomepage
       ) {
         setHasProcessedInitialMessage(true);
         handleBotResponse(lastMessage.content);
