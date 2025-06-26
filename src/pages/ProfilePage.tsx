@@ -23,7 +23,9 @@ import {
   Clock,
   Lightbulb,
   ArrowRight,
-  Plus
+  Plus,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 
 interface Profile {
@@ -75,6 +77,10 @@ export default function ProfilePage() {
     dayStreak: 0,
     currentLevel: 'Beginner'
   });
+
+  // State for expandable sections
+  const [expandedProgress, setExpandedProgress] = useState<{ [key: string]: boolean }>({});
+  const [showAllProgress, setShowAllProgress] = useState(false);
 
   useEffect(() => {
     if (loading) return;
@@ -210,6 +216,15 @@ export default function ProfilePage() {
     if (score >= 60) return 'bg-yellow-500';
     return 'bg-red-500';
   };
+
+  const toggleProgressExpansion = (progressId: string) => {
+    setExpandedProgress(prev => ({
+      ...prev,
+      [progressId]: !prev[progressId]
+    }));
+  };
+
+  const displayedProgress = showAllProgress ? learningProgress : learningProgress.slice(0, 3);
 
   if (loading || loadingData) {
     return (
@@ -492,11 +507,31 @@ export default function ProfilePage() {
             )}
           </div>
 
-          {/* Subject Progress */}
+          {/* Subject Progress - Enhanced with Expand/Collapse */}
           <div className="card">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">Subject Progress</h2>
-              <TrendingUp className="w-5 h-5 text-primary-600" />
+              <div className="flex items-center">
+                <TrendingUp className="w-6 h-6 text-primary-600 mr-3" />
+                <h2 className="text-xl font-semibold text-gray-900">Subject Progress</h2>
+              </div>
+              {learningProgress.length > 3 && (
+                <button
+                  onClick={() => setShowAllProgress(!showAllProgress)}
+                  className="flex items-center text-sm text-primary-600 hover:text-primary-700 font-medium"
+                >
+                  {showAllProgress ? (
+                    <>
+                      Show Less
+                      <ChevronUp className="w-4 h-4 ml-1" />
+                    </>
+                  ) : (
+                    <>
+                      Show All ({learningProgress.length})
+                      <ChevronDown className="w-4 h-4 ml-1" />
+                    </>
+                  )}
+                </button>
+              )}
             </div>
 
             {learningProgress.length === 0 ? (
@@ -509,78 +544,92 @@ export default function ProfilePage() {
               </div>
             ) : (
               <div className="space-y-6">
-                {learningProgress.map((progress) => (
-                  <div key={progress.id} className="border border-gray-200 rounded-lg p-4 sm:p-6">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-lg font-medium text-gray-900">{progress.topic}</h3>
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${getProgressColor(progress.progress_score)}`}>
-                        {progress.progress_score}%
-                      </span>
-                    </div>
+                {displayedProgress.map((progress) => (
+                  <div key={progress.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                    {/* Progress Header - Always Visible */}
+                    <div 
+                      className="p-4 sm:p-6 cursor-pointer hover:bg-gray-50 transition-colors duration-200"
+                      onClick={() => toggleProgressExpansion(progress.id)}
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-lg font-medium text-gray-900">{progress.topic}</h3>
+                        <div className="flex items-center space-x-3">
+                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${getProgressColor(progress.progress_score)}`}>
+                            {progress.progress_score}%
+                          </span>
+                          {expandedProgress[progress.id] ? (
+                            <ChevronUp className="w-5 h-5 text-gray-400" />
+                          ) : (
+                            <ChevronDown className="w-5 h-5 text-gray-400" />
+                          )}
+                        </div>
+                      </div>
 
-                    {/* Progress Bar */}
-                    <div className="mb-4">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div 
-                          className={`h-2 rounded-full transition-all duration-300 ${getProgressBarColor(progress.progress_score)}`}
-                          style={{ width: `${progress.progress_score}%` }}
-                        ></div>
+                      {/* Progress Bar */}
+                      <div className="mb-3">
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div 
+                            className={`h-2 rounded-full transition-all duration-300 ${getProgressBarColor(progress.progress_score)}`}
+                            style={{ width: `${progress.progress_score}%` }}
+                          ></div>
+                        </div>
+                      </div>
+
+                      {/* Quick Summary */}
+                      <div className="flex items-center justify-between text-sm text-gray-600">
+                        <span>
+                          {progress.strengths.length} strengths • {progress.weak_areas.length} areas to improve
+                        </span>
+                        <span>
+                          Updated {new Date(progress.last_updated).toLocaleDateString()}
+                        </span>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Strengths */}
-                      <div>
-                        <h4 className="text-sm font-medium text-green-700 mb-2 flex items-center">
-                          <Trophy className="w-4 h-4 mr-1" />
-                          Strengths ({progress.strengths.length})
-                        </h4>
-                        {progress.strengths.length > 0 ? (
-                          <div className="space-y-1">
-                            {progress.strengths.slice(0, 2).map((strength, index) => (
-                              <div key={index} className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
-                                {strength.length > 60 ? `${strength.substring(0, 60)}...` : strength}
+                    {/* Expanded Content */}
+                    {expandedProgress[progress.id] && (
+                      <div className="border-t border-gray-200 p-4 sm:p-6 bg-gray-50">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {/* Strengths */}
+                          <div>
+                            <h4 className="text-sm font-medium text-green-700 mb-3 flex items-center">
+                              <Trophy className="w-4 h-4 mr-1" />
+                              Strengths ({progress.strengths.length})
+                            </h4>
+                            {progress.strengths.length > 0 ? (
+                              <div className="space-y-2 max-h-40 overflow-y-auto">
+                                {progress.strengths.map((strength, index) => (
+                                  <div key={index} className="text-xs text-green-600 bg-green-50 px-3 py-2 rounded border border-green-200">
+                                    {strength.length > 80 ? `${strength.substring(0, 80)}...` : strength}
+                                  </div>
+                                ))}
                               </div>
-                            ))}
-                            {progress.strengths.length > 2 && (
-                              <div className="text-xs text-green-600">
-                                +{progress.strengths.length - 2} more
-                              </div>
+                            ) : (
+                              <p className="text-xs text-gray-500 italic">No strengths identified yet</p>
                             )}
                           </div>
-                        ) : (
-                          <p className="text-xs text-gray-500">No strengths identified yet</p>
-                        )}
-                      </div>
 
-                      {/* Weak Areas */}
-                      <div>
-                        <h4 className="text-sm font-medium text-red-700 mb-2 flex items-center">
-                          <Target className="w-4 h-4 mr-1" />
-                          Areas to Focus ({progress.weak_areas.length})
-                        </h4>
-                        {progress.weak_areas.length > 0 ? (
-                          <div className="space-y-1">
-                            {progress.weak_areas.slice(0, 2).map((weakness, index) => (
-                              <div key={index} className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded">
-                                {weakness.length > 60 ? `${weakness.substring(0, 60)}...` : weakness}
+                          {/* Weak Areas */}
+                          <div>
+                            <h4 className="text-sm font-medium text-red-700 mb-3 flex items-center">
+                              <Target className="w-4 h-4 mr-1" />
+                              Areas to Focus ({progress.weak_areas.length})
+                            </h4>
+                            {progress.weak_areas.length > 0 ? (
+                              <div className="space-y-2 max-h-40 overflow-y-auto">
+                                {progress.weak_areas.map((weakness, index) => (
+                                  <div key={index} className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded border border-red-200">
+                                    {weakness.length > 80 ? `${weakness.substring(0, 80)}...` : weakness}
+                                  </div>
+                                ))}
                               </div>
-                            ))}
-                            {progress.weak_areas.length > 2 && (
-                              <div className="text-xs text-red-600">
-                                +{progress.weak_areas.length - 2} more
-                              </div>
+                            ) : (
+                              <p className="text-xs text-gray-500 italic">No weak areas identified</p>
                             )}
                           </div>
-                        ) : (
-                          <p className="text-xs text-gray-500">No weak areas identified</p>
-                        )}
+                        </div>
                       </div>
-                    </div>
-
-                    <div className="mt-3 text-xs text-gray-500">
-                      Last updated: {new Date(progress.last_updated).toLocaleDateString()}
-                    </div>
+                    )}
                   </div>
                 ))}
               </div>
