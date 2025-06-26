@@ -237,24 +237,24 @@ export default function LearningDashboardPage() {
               <div className="flex items-center justify-center w-12 h-12 bg-orange-100 rounded-full mb-2 mx-auto">
                 <Flame className="w-6 h-6 text-orange-600" />
               </div>
-              <div className="text-2xl font-bold text-orange-600">{stats.dayStreak}</div>
               <div className="text-sm text-gray-600">Day Streak</div>
+              <div className="text-2xl font-bold text-orange-600">{stats.dayStreak}</div>
             </div>
             
             <div className="text-center">
               <div className="flex items-center justify-center w-12 h-12 bg-blue-100 rounded-full mb-2 mx-auto">
                 <Award className="w-6 h-6 text-blue-600" />
               </div>
-              <div className="text-2xl font-bold text-blue-600">{stats.currentLevel}</div>
               <div className="text-sm text-gray-600">Level</div>
+              <div className="text-2xl font-bold text-blue-600">{stats.currentLevel}</div>
             </div>
             
             <div className="text-center">
               <div className="flex items-center justify-center w-12 h-12 bg-green-100 rounded-full mb-2 mx-auto">
                 <BarChart3 className="w-6 h-6 text-green-600" />
               </div>
-              <div className="text-2xl font-bold text-green-600">{stats.overallProgress}%</div>
               <div className="text-sm text-gray-600">Progress</div>
+              <div className="text-2xl font-bold text-green-600">{stats.overallProgress}%</div>
             </div>
           </div>
         </div>
