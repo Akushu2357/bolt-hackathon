@@ -1,97 +1,116 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Send, Bot, User, Plus, MessageCircle, Trash2, Menu, X, LogIn, Settings, Zap } from 'lucide-react';
-import GuestLimitModal from '../components/common/GuestLimitModal';
-import { GuestLimitService } from '../services/guestLimitService';
-import { AIChatService, ChatMessage as AIChatMessage } from '../services/aiChatService';
-
-interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  created_at: string;
-}
+import { Plus, MessageCircle, Trash2, ChevronRight, ChevronLeft, Sparkles } from 'lucide-react';
+import RealTimeChatComponent from '../components/chat/RealTimeChatComponent';
+import QuizContextBanner from '../components/chat/QuizContextBanner';
+import QuizSuggestedPrompts from '../components/chat/QuizSuggestedPrompts';
+import { useChatSession } from '../hooks/useChatSession';
+import { ChatApiService, ChatMessage } from '../services/chatApiService';
+import { QuizChatIntegrationService, QuizChatContext } from '../services/quizChatIntegrationService';
 
 interface ChatSession {
   id: string;
   title: string;
   created_at: string;
+  updated_at: string;
 }
 
 export default function ChatPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const { sessionId } = useParams();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [inputMessage, setInputMessage] = useState('');
-  const [loading, setLoading] = useState(false); // for message sending
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [showSidebar, setShowSidebar] = useState(false);
-  const [guestMessages, setGuestMessages] = useState<Message[]>([]);
-  const [showLimitModal, setShowLimitModal] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [aiProvider, setAiProvider] = useState<'openai' | 'groq' | 'anthropic'>('groq');
-  const [providerStatus, setProviderStatus] = useState<Record<string, { available: boolean; name: string }>>({});
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [activeSessionId, setActiveSessionId] = useState<string | undefined>(sessionId);
+  const [quizContext, setQuizContext] = useState<QuizChatContext | null>(null);
+  const [showQuizBanner, setShowQuizBanner] = useState(false);
+
+  const {
+    currentSession,
+    messages,
+    loading: sessionLoading,
+    error: sessionError,
+    saveMessage,
+    createNewSession,
+    updateSessionTitle,
+    setMessages
+  } = useChatSession(activeSessionId);
 
   useEffect(() => {
-    if (authLoading) return;
-    // Check provider status
-    setProviderStatus(AIChatService.getProviderStatus());
-    
-    // Check for initial message from URL params (for logged-out users)
-    const urlParams = new URLSearchParams(location.search);
-    const initialMessage = urlParams.get('message');
-    
-    if (initialMessage && !user) {
-      setInputMessage(initialMessage);
-      // Clear the URL parameter
-      navigate('/chat', { replace: true });
-    }
-
     if (user) {
       fetchSessions();
     } else {
-      // For guest users, load from localStorage
-      const savedGuestMessages = localStorage.getItem('guestMessages');
-      if (savedGuestMessages) {
-        setGuestMessages(JSON.parse(savedGuestMessages));
-      }
       setLoadingSessions(false);
     }
-  }, [user, authLoading, location.search, navigate]);
+  }, [user]);
 
+  // Handle quiz integration from navigation state
   useEffect(() => {
-    if (currentSession) {
-      fetchMessages(currentSession.id);
+    const { state } = location as {
+      state?: {
+        fromQuiz?: boolean;
+        quizContext?: QuizChatContext;
+      };
+    };
+
+    // Handle quiz context from navigation state
+    if (state?.fromQuiz && state?.quizContext) {
+      setQuizContext(state.quizContext);
+      setShowQuizBanner(true);
+
+      const autoMessage = QuizChatIntegrationService.createInitialChatMessage(state.quizContext);
+      const userMessage: ChatMessage = {
+        id: `quiz_auto_${Date.now()}`,
+        role: 'user',
+        content: autoMessage,
+        timestamp: new Date().toISOString(),
+        type: 'text',
+      };
+      setMessages([userMessage]);
+
+      navigate(location.pathname, { replace: true });
+      return;
     }
-  }, [currentSession]);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, guestMessages]);
+    // Handle stored context from previous session
+    const storedContext = QuizChatIntegrationService.getAndClearQuizContext();
+    if (storedContext) {
+      setQuizContext(storedContext);
+      setShowQuizBanner(true);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+      const autoMessage = QuizChatIntegrationService.createInitialChatMessage(storedContext);
+      const userMessage: ChatMessage = {
+        id: `quiz_stored_${Date.now()}`,
+        role: 'user',
+        content: autoMessage,
+        timestamp: new Date().toISOString(),
+        type: 'text',
+      };
+      setMessages([userMessage]);
+    }
+  }, [location, navigate, setMessages]);
 
   const fetchSessions = async () => {
+    if (!user) return;
+
     try {
       const { data, error } = await supabase
         .from('chat_sessions')
         .select('*')
-        .eq('user_id', user!.id)
+        .eq('user_id', user.id)
         .order('updated_at', { ascending: false });
 
       if (error) throw error;
       setSessions(data || []);
       
-      if (data && data.length > 0) {
-        setCurrentSession(data[0]);
+      // If no active session and we have sessions, select the first one
+      if (!activeSessionId && data && data.length > 0) {
+        setActiveSessionId(data[0].id);
+        navigate(`/chat/${data[0].id}`, { replace: true });
       }
     } catch (error) {
       console.error('Error fetching sessions:', error);
@@ -100,55 +119,39 @@ export default function ChatPage() {
     }
   };
 
-  const fetchMessages = async (sessionId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('chat_messages')
-        .select('*')
-        .eq('session_id', sessionId)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      setMessages(data || []);
-    } catch (error) {
-      console.error('Error fetching messages:', error);
-    }
-  };
-
-  const createNewSession = async () => {
-    if (!user) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('chat_sessions')
-        .insert({
-          user_id: user.id,
-          title: 'New Chat Session'
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      
-      const newSession = data;
+  const handleCreateNewSession = async () => {
+    const newSession = await createNewSession();
+    if (newSession) {
       setSessions([newSession, ...sessions]);
-      setCurrentSession(newSession);
-      setMessages([]);
+      setActiveSessionId(newSession.id);
+      navigate(`/chat/${newSession.id}`);
       setShowSidebar(false);
-    } catch (error) {
-      console.error('Error creating session:', error);
+      // Clear quiz context when starting new session
+      setQuizContext(null);
+      setShowQuizBanner(false);
     }
   };
 
-  const deleteSession = async (sessionId: string) => {
+  const handleSelectSession = (session: ChatSession) => {
+    setActiveSessionId(session.id);
+    navigate(`/chat/${session.id}`);
+    setShowSidebar(false);
+    // Clear quiz context when switching sessions
+    setQuizContext(null);
+    setShowQuizBanner(false);
+  };
+
+  const handleDeleteSession = async (sessionId: string) => {
     if (!user) return;
 
     try {
+      // Delete messages first
       await supabase
         .from('chat_messages')
         .delete()
         .eq('session_id', sessionId);
 
+      // Delete session
       await supabase
         .from('chat_sessions')
         .delete()
@@ -157,150 +160,59 @@ export default function ChatPage() {
       const updatedSessions = sessions.filter(s => s.id !== sessionId);
       setSessions(updatedSessions);
       
-      if (currentSession?.id === sessionId) {
-        setCurrentSession(updatedSessions[0] || null);
-        setMessages([]);
+      // If we deleted the active session, switch to another or create new
+      if (activeSessionId === sessionId) {
+        if (updatedSessions.length > 0) {
+          setActiveSessionId(updatedSessions[0].id);
+          navigate(`/chat/${updatedSessions[0].id}`);
+        } else {
+          setActiveSessionId(undefined);
+          navigate('/chat');
+        }
       }
     } catch (error) {
       console.error('Error deleting session:', error);
     }
   };
 
-  const sendMessage = async () => {
-    if (!inputMessage.trim() || loading) return;
-
-    // Check guest limits
-    if (!user && !GuestLimitService.canPerformAction('chat')) {
-      setShowLimitModal(true);
-      return;
-    }
-
-    const userMessage = inputMessage.trim();
-    setInputMessage('');
-    setLoading(true);
-
-    try {
-      if (user && currentSession) {
-        // Logged-in user flow
-        const userMsg: Message = {
-          id: Date.now().toString(),
-          role: 'user',
-          content: userMessage,
-          created_at: new Date().toISOString()
-        };
-        setMessages(prev => [...prev, userMsg]);
-
-        await supabase
-          .from('chat_messages')
-          .insert({
-            session_id: currentSession.id,
-            role: 'user',
-            content: userMessage
-          });
-
-        // Convert messages to AI chat format for context
-        const conversationHistory: AIChatMessage[] = messages.map(msg => ({
-          role: msg.role,
-          content: msg.content
-        }));
-
-        // Generate AI response using the selected provider
-        const aiResponse = await AIChatService.generateResponse(
-          userMessage, 
-          conversationHistory, 
-          aiProvider
-        );
-        
-        const aiMsg: Message = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: aiResponse,
-          created_at: new Date().toISOString()
-        };
-        setMessages(prev => [...prev, aiMsg]);
-
-        await supabase
-          .from('chat_messages')
-          .insert({
-            session_id: currentSession.id,
-            role: 'assistant',
-            content: aiResponse
-          });
-
-        if (messages.length === 0) {
-          const title = userMessage.length > 50 
-            ? userMessage.substring(0, 50) + '...' 
-            : userMessage;
-          
-          await supabase
-            .from('chat_sessions')
-            .update({ title })
-            .eq('id', currentSession.id);
-
-          setSessions(prev => 
-            prev.map(s => s.id === currentSession.id ? { ...s, title } : s)
-          );
-        }
-      } else {
-        // Guest user flow
-        const userMsg: Message = {
-          id: Date.now().toString(),
-          role: 'user',
-          content: userMessage,
-          created_at: new Date().toISOString()
-        };
-
-        const newGuestMessages = [...guestMessages, userMsg];
-        setGuestMessages(newGuestMessages);
-
-        // Convert guest messages to AI chat format for context
-        const conversationHistory: AIChatMessage[] = guestMessages.map(msg => ({
-          role: msg.role,
-          content: msg.content
-        }));
-
-        // Generate AI response using the selected provider
-        const aiResponse = await AIChatService.generateResponse(
-          userMessage, 
-          conversationHistory, 
-          aiProvider
-        );
-        
-        const aiMsg: Message = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: aiResponse,
-          created_at: new Date().toISOString()
-        };
-
-        const finalMessages = [...newGuestMessages, aiMsg];
-        setGuestMessages(finalMessages);
-
-        // Increment guest usage
-        GuestLimitService.incrementUsage('chat');
-
-        // Save to localStorage
-        localStorage.setItem('guestMessages', JSON.stringify(finalMessages));
-      }
-    } catch (error) {
-      console.error('Error sending message:', error);
-    } finally {
-      setLoading(false);
+  const handleMessageSent = async (message: ChatMessage) => {
+    await saveMessage(message);
+    
+    // Update session title if it's the first user message
+    if (message.role === 'user' && currentSession && messages.length <= 1) {
+      const title = message.content.length > 50 
+        ? message.content.substring(0, 50) + '...' 
+        : message.content;
+      
+      await updateSessionTitle(title);
+      
+      // Update local sessions list
+      setSessions(prev => 
+        prev.map(s => s.id === currentSession.id ? { ...s, title } : s)
+      );
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
+  const handleQuizGenerated = (quizId: string) => {
+    // Navigate to quiz page with the generated quiz
+    navigate('/quiz', { 
+      state: { 
+        startQuizId: quizId 
+      } 
+    });
   };
 
-  const displayMessages = user ? messages : guestMessages;
-  const canSendMessage = user || GuestLimitService.canPerformAction('chat');
-  const guestUsage = GuestLimitService.getUsageSummary();
+  const handlePromptSelect = (prompt: string) => {
+    // This will be handled by the RealTimeChatComponent
+    // We can pass this down as a prop if needed
+  };
 
-  if (loadingSessions) {
+  const handleDismissQuizBanner = () => {
+    setShowQuizBanner(false);
+    setQuizContext(null);
+  };
+
+  if (loadingSessions || sessionLoading) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
@@ -312,65 +224,22 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="h-screen overflow-hidden bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
-        <div className="flex h-[calc(100vh-8rem)] sm:h-[calc(100vh-12rem)] bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="flex h-full max-h-[calc(100vh-8rem)] sm:max-h-[calc(100vh-12rem)] bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           {/* Sidebar - Only show for logged-in users */}
           {user && (
             <div className={`${showSidebar ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 fixed lg:relative inset-y-0 left-0 z-50 w-80 bg-white border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out lg:transition-none`}>
               {/* Sidebar Header */}
               <div className="p-4 border-b border-gray-200">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-gray-900">Chats</h2>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => setShowSettings(!showSettings)}
-                      className="p-1 hover:bg-gray-100 rounded"
-                      title="AI Settings"
-                    >
-                      <Settings className="w-5 h-5 text-gray-600" />
-                    </button>
-                    <button
-                      onClick={() => setShowSidebar(false)}
-                      className="lg:hidden p-1 hover:bg-gray-100 rounded"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
+                  <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+                    <Sparkles className="w-5 h-5 mr-2 text-primary-600" />
+                    AI Chats
+                  </h2>
                 </div>
-
-                {/* AI Provider Settings */}
-                {showSettings && (
-                  <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                    <h3 className="text-sm font-medium text-gray-700 mb-2">AI Provider</h3>
-                    <div className="space-y-2">
-                      {Object.entries(providerStatus).map(([key, status]) => (
-                        <label key={key} className="flex items-center">
-                          <input
-                            type="radio"
-                            name="aiProvider"
-                            value={key}
-                            checked={aiProvider === key}
-                            onChange={(e) => setAiProvider(e.target.value as any)}
-                            className="mr-2"
-                          />
-                          <span className="text-sm text-gray-700">{status.name}</span>
-                          {status.available ? (
-                            <Zap className="w-3 h-3 text-green-500 ml-1" />
-                          ) : (
-                            <span className="text-xs text-gray-400 ml-1">(No API key)</span>
-                          )}
-                        </label>
-                      ))}
-                    </div>
-                    <p className="text-xs text-gray-500 mt-2">
-                      Add API keys to .env file to enable real AI responses
-                    </p>
-                  </div>
-                )}
-
                 <button
-                  onClick={createNewSession}
+                  onClick={handleCreateNewSession}
                   className="w-full btn-primary flex items-center justify-center space-x-2"
                 >
                   <Plus className="w-4 h-4" />
@@ -384,6 +253,7 @@ export default function ChatPage() {
                   <div className="p-4 text-center text-gray-500">
                     <MessageCircle className="w-8 h-8 mx-auto mb-2 text-gray-400" />
                     <p className="text-sm">No chat sessions yet</p>
+                    <p className="text-xs text-gray-400 mt-1">Create your first chat to get started</p>
                   </div>
                 ) : (
                   <div className="p-2">
@@ -391,27 +261,24 @@ export default function ChatPage() {
                       <div
                         key={session.id}
                         className={`group flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors duration-200 ${
-                          currentSession?.id === session.id
-                            ? 'bg-primary-50 text-primary-700'
+                          activeSessionId === session.id
+                            ? 'bg-primary-50 text-primary-700 border border-primary-200'
                             : 'hover:bg-gray-50'
                         }`}
-                        onClick={() => {
-                          setCurrentSession(session);
-                          setShowSidebar(false);
-                        }}
+                        onClick={() => handleSelectSession(session)}
                       >
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">
                             {session.title}
                           </p>
                           <p className="text-xs text-gray-500">
-                            {new Date(session.created_at).toLocaleDateString()}
+                            {new Date(session.updated_at).toLocaleDateString()}
                           </p>
                         </div>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            deleteSession(session.id);
+                            handleDeleteSession(session.id);
                           }}
                           className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 rounded transition-all duration-200"
                         >
@@ -433,167 +300,81 @@ export default function ChatPage() {
             ></div>
           )}
 
+          {/* Sidebar Toggle Button (left side) */}
+          {user && (
+            <button
+              onClick={() => setShowSidebar(!showSidebar)}
+              className={`lg:hidden fixed top-1/3 z-40 bg-white border border-gray-200 rounded-r-lg shadow-md pt-7 pe-1 pb-7 transition-transform duration-300 ${
+                showSidebar ? 'translate-x-80' : 'translate-x-0'
+              }`}
+              style={{ left: 0 }}
+            >
+              {showSidebar ? (
+                <ChevronLeft className="w-5 h-5 text-gray-600" />
+              ) : (
+                <ChevronRight className="w-5 h-5 text-gray-600" />
+              )}
+            </button>
+          )}
+
           {/* Chat Area */}
-          <div className="flex-1 flex flex-col min-w-0">
-            {/* Chat Header */}
-            <div className="p-4 border-b border-gray-200 bg-white">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  {user && (
-                    <button
-                      onClick={() => setShowSidebar(true)}
-                      className="lg:hidden p-1 hover:bg-gray-100 rounded"
-                    >
-                      <Menu className="w-5 h-5" />
-                    </button>
-                  )}
-                  <h3 className="font-semibold text-gray-900 truncate">
-                    {user ? (currentSession?.title || 'AI Tutor Chat') : 'AI Tutor Chat (Guest Mode)'}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {sessionError ? (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <MessageCircle className="w-6 h-6 text-red-600" />
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    Error Loading Chat
                   </h3>
-                  {providerStatus[aiProvider]?.available && (
-                    <div className="flex items-center space-x-1 text-green-600">
-                      <Zap className="w-4 h-4" />
-                      <span className="text-xs font-medium">{providerStatus[aiProvider].name}</span>
-                    </div>
-                  )}
+                  <p className="text-gray-600 mb-4">{sessionError}</p>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="btn-primary"
+                  >
+                    Retry
+                  </button>
                 </div>
-                {!user && (
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm text-gray-600">
-                      {guestUsage.chats.remaining}/{guestUsage.chats.total} free chats left
-                    </span>
-                    <button
-                      onClick={() => navigate('/auth')}
-                      className="btn-primary text-sm flex items-center space-x-1"
-                    >
-                      <LogIn className="w-4 h-4" />
-                      <span>Login</span>
-                    </button>
+              </div>
+            ) : (
+              <>
+                {/* Quiz Context Banner (Fixed) */}
+                {showQuizBanner && quizContext && (
+                  <div className="shrink-0 p-4 border-b border-gray-200 bg-white">
+                    <QuizContextBanner
+                      quizContext={quizContext}
+                      onDismiss={handleDismissQuizBanner}
+                    />
                   </div>
                 )}
-              </div>
-            </div>
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {displayMessages.length === 0 ? (
-                <div className="text-center py-8 sm:py-12">
-                  <Bot className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    {user ? 'Start a conversation' : 'Welcome to TutorAI!'}
-                  </h3>
-                  <p className="text-gray-600 mb-4">
-                    {user 
-                      ? 'Ask me anything! I\'m here to help you learn.'
-                      : `You have ${guestUsage.chats.remaining} free chat${guestUsage.chats.remaining !== 1 ? 's' : ''} remaining. Login for unlimited access!`
-                    }
-                  </p>
-                  {!providerStatus[aiProvider]?.available && (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 max-w-md mx-auto">
-                      <p className="text-sm text-yellow-700">
-                        💡 <strong>Tip:</strong> Add API keys to .env file for real AI responses!
-                      </p>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                displayMessages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div className={`flex max-w-[85%] sm:max-w-3xl ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                      <div className={`flex-shrink-0 ${message.role === 'user' ? 'ml-2 sm:ml-3' : 'mr-2 sm:mr-3'}`}>
-                        <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center ${
-                          message.role === 'user' 
-                            ? 'bg-primary-600' 
-                            : 'bg-gray-200'
-                        }`}>
-                          {message.role === 'user' ? (
-                            <User className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
-                          ) : (
-                            <Bot className="w-3 h-3 sm:w-4 sm:h-4 text-gray-600" />
-                          )}
-                        </div>
-                      </div>
-                      <div className={`px-3 py-2 sm:px-4 sm:py-2 rounded-lg ${
-                        message.role === 'user'
-                          ? 'bg-primary-600 text-white'
-                          : 'bg-gray-100 text-gray-900'
-                      }`}>
-                        <p className="whitespace-pre-wrap text-sm sm:text-base">{message.content}</p>
-                      </div>
-                    </div>
+                {/* Quiz Suggested Prompts (Fixed) */}
+                {quizContext && messages.length === 0 && (
+                  <div className="shrink-0 p-4 border-b border-gray-200 bg-white">
+                    <QuizSuggestedPrompts
+                      quizContext={quizContext}
+                      onPromptSelect={handlePromptSelect}
+                    />
                   </div>
-                ))
-              )}
-              {loading && (
-                <div className="flex justify-start">
-                  <div className="flex max-w-3xl">
-                    <div className="flex-shrink-0 mr-2 sm:mr-3">
-                      <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                        <Bot className="w-3 h-3 sm:w-4 sm:h-4 text-gray-600" />
-                      </div>
-                    </div>
-                    <div className="px-3 py-2 sm:px-4 sm:py-2 rounded-lg bg-gray-100">
-                      <div className="flex space-x-1">
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
+                )}
 
-            {/* Input */}
-            <div className="border-t border-gray-200 p-4">
-              {!canSendMessage ? (
-                <div className="text-center py-4">
-                  <p className="text-gray-600 mb-4">
-                    You've used all {guestUsage.chats.total} free chats. Login to continue chatting!
-                  </p>
-                  <button
-                    onClick={() => navigate('/auth')}
-                    className="btn-primary flex items-center justify-center space-x-2 mx-auto"
-                  >
-                    <LogIn className="w-4 h-4" />
-                    <span>Login for Unlimited Access</span>
-                  </button>
-                </div>
-              ) : (
-                <div className="flex space-x-2 sm:space-x-4">
-                  <textarea
-                    value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    placeholder="Ask me anything..."
-                    className="flex-1 resize-none input-field text-sm sm:text-base"
-                    rows={1}
-                    disabled={loading}
+                {/* Chat Messages (Scrollable) */}
+                <div className="flex-1 overflow-y-auto px-4 py-2 space-y-2 bg-white">
+                  <RealTimeChatComponent
+                    sessionId={activeSessionId || 'guest'}
+                    initialMessages={messages}
+                    onMessageSent={handleMessageSent}
+                    onQuizGenerated={handleQuizGenerated}
+                    quizContext={quizContext}
                   />
-                  <button
-                    onClick={sendMessage}
-                    disabled={!inputMessage.trim() || loading}
-                    className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed px-3 sm:px-4"
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
                 </div>
-              )}
-            </div>
+
+              </>
+            )}
           </div>
         </div>
       </div>
-
-      {/* Guest Limit Modal */}
-      <GuestLimitModal
-        isOpen={showLimitModal}
-        onClose={() => setShowLimitModal(false)}
-        limitType="chat"
-      />
     </div>
   );
 }

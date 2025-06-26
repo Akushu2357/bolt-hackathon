@@ -30,8 +30,11 @@ import PerformanceAnalysis from '../components/QuizResultsPage/PerformanceAnalys
 import DetailedReview from '../components/QuizResultsPage/DetailedReview';
 import Recommendations from '../components/QuizResultsPage/Recommendations';
 import QuizPerformanceSidebar from '../components/QuizResultsPage/QuizPerformanceSidebar';
+import QuizResultsActions from '../components/quiz/QuizResultsActions';
+import GuestQuizLimitations from '../components/quiz/GuestQuizLimitations';
 import GuestLimitModal from '../components/common/GuestLimitModal';
 import { QuizScoringService } from '../services/quizScoringService';
+import { QuizChatIntegrationService } from '../services/quizChatIntegrationService';
 import { GradedQuestion } from '../services/gradingService';
 
 interface Question {
@@ -356,6 +359,14 @@ export default function QuizResultsPage() {
   // Use the original score from the quiz attempt (which includes AI grading) instead of recalculating
   const actualScore = originalScore || Math.round((correctCount / quiz.questions.length) * 100);
 
+  // Create quiz context for chat integration
+  const quizContext = QuizChatIntegrationService.formatQuizResultsForChat(
+    quiz,
+    selectedAnswers,
+    actualScore,
+    gradingResults
+  );
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
@@ -477,11 +488,33 @@ export default function QuizResultsPage() {
               setShowAnswers={handleShowAnswers}
               retakeQuiz={retakeQuiz}
               partialCount={partialCount}
+              quizContext={quizContext}        // ต้องมีตัวแปรนี้อยู่แล้วใน Parent
+              showChatIntegration={true}       // ถ้าอยากแสดงปุ่ม Discuss
             />
+            
             <PerformanceAnalysis
               loadingAnalysis={loadingAnalysis}
               analysisText={analysisText}
             />
+
+            {/* Quiz Results Actions - Different for guest vs authenticated users
+            <div className="mb-6 sm:mb-8">
+              {user ? (
+                <QuizResultsActions
+                  quizContext={quizContext}
+                  onRetakeQuiz={retakeQuiz}
+                  showChatIntegration={true}
+                />
+              ) : (
+                <GuestQuizLimitations
+                  score={actualScore}
+                  totalQuestions={quiz.questions.length}
+                  correctCount={correctCount}
+                  onRetakeQuiz={retakeQuiz}
+                />
+              )}
+            </div> */}
+            
             {showAnswers && user && (
               <DetailedReview
                 quizQuestions={quiz.questions}

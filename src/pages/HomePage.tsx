@@ -203,7 +203,7 @@ export default function HomePage() {
     setChatLoading(true);
     try {
       if (user) {
-        // Create new chat session for logged-in users
+        // For authenticated users, create new session and navigate with prefilled message
         const { data: newSession, error } = await supabase
           .from('chat_sessions')
           .insert({
@@ -215,24 +215,17 @@ export default function HomePage() {
 
         if (error) throw error;
 
-        // Add the initial message to the session
-        await supabase
-          .from('chat_messages')
-          .insert({
-            session_id: newSession.id,
-            role: 'user',
-            content: chatInput
-          });
-
-        navigate('/chat');
+        // Navigate to chat with the session ID and prefilled message
+        navigate(`/chat/${newSession.id}?prefill=${encodeURIComponent(chatInput.trim())}`);
       } else {
-        // For logged-out users, navigate to chat with query parameter
-        navigate(`/chat?message=${encodeURIComponent(chatInput)}`);
+        // For guest users, navigate to chat with prefilled message
+        navigate(`/chat?prefill=${encodeURIComponent(chatInput.trim())}`);
       }
     } catch (error) {
       console.error('Error creating chat session:', error);
     } finally {
       setChatLoading(false);
+      setChatInput(''); // Clear input after navigation
     }
   };
 
