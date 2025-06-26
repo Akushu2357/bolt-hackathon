@@ -5,7 +5,6 @@ import {
   Plus, 
   CheckCircle, 
   BookOpen,
-  Menu,
   LogIn,
   Lock
 } from 'lucide-react';
@@ -14,6 +13,7 @@ import QuizQuestion from '../components/QuizPage/QuizQuestion';
 import QuizList from '../components/QuizPage/QuizList';
 import CreateQuizForm from '../components/QuizPage/CreateQuizForm';
 import RecentAttemptsSidebar from '../components/QuizPage/RecentAttemptsSidebar';
+import RecentAttemptsCollapsible from '../components/QuizPage/RecentAttemptsCollapsible';
 import GuestLimitModal from '../components/common/GuestLimitModal';
 import { QuizService, QuizSettings } from '../services/quizService';
 import { QuizDataService } from '../services/quizDataService';
@@ -35,7 +35,6 @@ export default function QuizPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newQuizTopic, setNewQuizTopic] = useState('');
   const [newQuizDifficulty, setNewQuizDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
-  const [showSidebar, setShowSidebar] = useState(false);
   const [guestQuizzes, setGuestQuizzes] = useState<Quiz[]>([]);
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [limitModalType, setLimitModalType] = useState<'quiz' | 'quizAttempt'>('quiz');
@@ -213,7 +212,6 @@ export default function QuizPage() {
       }
     });
     setSelectedAnswers(initialAnswers);
-    setShowSidebar(false);
   };
 
   const selectSingleAnswer = (answerIndex: number) => {
@@ -536,12 +534,6 @@ export default function QuizPage() {
               </button>
             )}
             <button
-              onClick={() => setShowSidebar(!showSidebar)}
-              className="btn-secondary lg:hidden"
-            >
-              <Menu className="w-4 h-4" />
-            </button>
-            <button
               onClick={() => canGenerateQuiz ? setShowCreateForm(true) : setShowLimitModal(true)}
               className={`btn-primary flex items-center space-x-2 ${!canGenerateQuiz ? 'opacity-75' : ''}`}
             >
@@ -594,6 +586,11 @@ export default function QuizPage() {
         <div className="flex flex-col lg:flex-row gap-6 sm:gap-8">
           {/* Main Content */}
           <div className="flex-1">
+            {/* Mobile Collapsible Recent Attempts - Only show for authenticated users */}
+            {user && (
+              <RecentAttemptsCollapsible attempts={attempts} />
+            )}
+            
             <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">Available Quizzes</h2>
             {availableQuizzes.length === 0 ? (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 sm:p-12 text-center">
@@ -636,8 +633,6 @@ export default function QuizPage() {
           {user && (
             <RecentAttemptsSidebar
               attempts={attempts}
-              showSidebar={showSidebar}
-              onClose={() => setShowSidebar(false)}
             />
           )}
         </div>

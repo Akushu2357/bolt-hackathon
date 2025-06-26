@@ -26,6 +26,22 @@ const CreateQuizForm: React.FC<CreateQuizFormProps> = ({
   onSettingsChange
 }) => {
   const [showAdvanced, setShowAdvanced] = React.useState(false);
+  
+  // Local state for input values to allow empty strings during editing
+  const [inputValues, setInputValues] = React.useState({
+    numberOfQuestions: settings?.numberOfQuestions?.toString() || '5',
+    numberOfChoices: settings?.numberOfChoices?.toString() || '4'
+  });
+
+  // Update local state when settings change from parent
+  React.useEffect(() => {
+    if (settings) {
+      setInputValues({
+        numberOfQuestions: settings.numberOfQuestions.toString(),
+        numberOfChoices: settings.numberOfChoices.toString()
+      });
+    }
+  }, [settings]);
 
   const handleSettingsChange = (newSettings: Partial<QuizSettings>) => {
     if (settings && onSettingsChange) {
@@ -119,8 +135,26 @@ const CreateQuizForm: React.FC<CreateQuizFormProps> = ({
                         type="number"
                         min="3"
                         max="15"
-                        value={settings.numberOfQuestions}
-                        onChange={e => handleSettingsChange({ numberOfQuestions: parseInt(e.target.value) || 5 })}
+                        value={inputValues.numberOfQuestions}
+                        onChange={e => {
+                          const value = e.target.value;
+                          setInputValues(prev => ({ ...prev, numberOfQuestions: value }));
+                          
+                          // Only update settings if it's a valid number
+                          const num = parseInt(value);
+                          if (!isNaN(num) && num >= 3 && num <= 15) {
+                            handleSettingsChange({ numberOfQuestions: num });
+                          }
+                        }}
+                        onBlur={e => {
+                          const value = e.target.value;
+                          const num = parseInt(value);
+                          if (isNaN(num) || num < 3 || num > 15) {
+                            // Reset to default if invalid
+                            setInputValues(prev => ({ ...prev, numberOfQuestions: '5' }));
+                            handleSettingsChange({ numberOfQuestions: 5 });
+                          }
+                        }}
                         className="input-field bg-white border-gray-300"
                       />
                     </div>
@@ -132,8 +166,26 @@ const CreateQuizForm: React.FC<CreateQuizFormProps> = ({
                         type="number"
                         min="2"
                         max="6"
-                        value={settings.numberOfChoices}
-                        onChange={e => handleSettingsChange({ numberOfChoices: parseInt(e.target.value) || 4 })}
+                        value={inputValues.numberOfChoices}
+                        onChange={e => {
+                          const value = e.target.value;
+                          setInputValues(prev => ({ ...prev, numberOfChoices: value }));
+                          
+                          // Only update settings if it's a valid number
+                          const num = parseInt(value);
+                          if (!isNaN(num) && num >= 2 && num <= 6) {
+                            handleSettingsChange({ numberOfChoices: num });
+                          }
+                        }}
+                        onBlur={e => {
+                          const value = e.target.value;
+                          const num = parseInt(value);
+                          if (isNaN(num) || num < 2 || num > 6) {
+                            // Reset to default if invalid
+                            setInputValues(prev => ({ ...prev, numberOfChoices: '4' }));
+                            handleSettingsChange({ numberOfChoices: 4 });
+                          }
+                        }}
                         className="input-field bg-white border-gray-300"
                       />
                     </div>

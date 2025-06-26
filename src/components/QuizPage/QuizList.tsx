@@ -1,11 +1,34 @@
 import React from 'react';
-import { Play, Clock } from 'lucide-react';
+import { Play, Clock, List } from 'lucide-react';
 
 interface QuizListProps {
   quizzes: any[];
   onStart: (quiz: any) => void;
   getDifficultyColor: (difficulty: string) => string;
 }
+
+// Function to calculate estimated time for completing a quiz
+const calculateEstimatedTime = (questionCount: number): string => {
+  // Estimate based on question types and typical completion times
+  // Single/Multiple choice: ~30-45 seconds per question
+  // True/False: ~20-30 seconds per question  
+  // Open-ended: ~2-3 minutes per question
+  // Using average of ~60 seconds per question for mixed question types
+  const baseTimePerQuestion = 0.75; // 1 minute per question as base estimate
+  const totalMinutes = questionCount * baseTimePerQuestion;
+  
+  if (totalMinutes < 1) {
+    return '< 1 min';
+  } else if (totalMinutes === 1) {
+    return '1 min';
+  } else if (totalMinutes < 60) {
+    return `${totalMinutes} mins`;
+  } else {
+    const hours = Math.floor(totalMinutes / 60);
+    const remainingMins = totalMinutes % 60;
+    return remainingMins > 0 ? `${hours}h ${remainingMins}m` : `${hours}h`;
+  }
+};
 
 const QuizList: React.FC<QuizListProps> = ({ quizzes, onStart, getDifficultyColor }) => (
   <div className="space-y-4">
@@ -20,8 +43,12 @@ const QuizList: React.FC<QuizListProps> = ({ quizzes, onStart, getDifficultyColo
                 {quiz.difficulty}
               </span>
               <span className="flex items-center">
-                <Clock className="w-4 h-4 mr-1" />
+                <List className="w-4 h-4 mr-1" />
                 {quiz.questions.length} questions
+              </span>
+              <span className="flex items-center">
+                <Clock className="w-4 h-4 mr-1" />
+                ~{calculateEstimatedTime(quiz.questions.length)}
               </span>
             </div>
           </div>
