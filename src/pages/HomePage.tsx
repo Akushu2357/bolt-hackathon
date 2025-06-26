@@ -204,15 +204,6 @@ export default function HomePage() {
 
         if (error) throw error;
 
-        // Add the initial message to the session
-        await supabase
-          .from('chat_messages')
-          .insert({
-            session_id: newSession.id,
-            role: 'user',
-            content: chatInput
-          });
-
         // Navigate to chat with the session ID and trigger bot response
         navigate(`/chat/${newSession.id}`, {
           state: {
@@ -222,7 +213,12 @@ export default function HomePage() {
         });
       } else {
         // For guest users, navigate to chat with the message in state
-        
+        navigate('/chat', {
+          state: {
+            initialMessage: chatInput,
+            triggerBotResponse: true
+          }
+        });
       }
     } catch (error) {
       console.error('Error creating chat session:', error);
