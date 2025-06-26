@@ -1,4 +1,0 @@
-import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-export default function Footer() {
-    return (_jsx("footer", { className: "bg-white border-t border-gray-200 py-5", children: _jsx("div", { className: "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8", children: _jsxs("div", { className: "flex flex-col items-center justify-center space-y-4", children: [_jsx("a", { href: "https://bolt.new/", target: "_blank", rel: "noopener noreferrer", children: _jsx("img", { src: "/image.png", alt: "Powered by Bolt", className: "h-16 w-16 rounded-full object-cover object-center" }) }), _jsx("div", { className: "text-center", children: _jsxs("p", { className: "text-sm text-gray-600", children: ["\u00A9 2025 TutorAI. Built with \u2764\uFE0F using", ' ', _jsx("a", { href: "https://bolt.new/", target: "_blank", rel: "noopener noreferrer", className: "text-primary-600 hover:text-primary-700 font-medium", children: "Bolt" })] }) })] }) }) }));
-}
