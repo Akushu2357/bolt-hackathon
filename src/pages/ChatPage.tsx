@@ -28,6 +28,7 @@ export default function ChatPage() {
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>(sessionId);
   const [quizContext, setQuizContext] = useState<QuizChatContext | null>(null);
   const [showQuizBanner, setShowQuizBanner] = useState(false);
+  const [initialMessageProcessed, setInitialMessageProcessed] = useState(false);
 
   const {
     currentSession,
@@ -48,8 +49,10 @@ export default function ChatPage() {
     }
   }, [user]);
 
-  // Handle initial message from HomePage and quiz integration
+  // Handle initial message from HomePage - ปรับปรุงใหม่
   useEffect(() => {
+    if (initialMessageProcessed) return; // ป้องกันการทำงานซ้ำ
+
     const { state } = location as {
       state?: {
         fromQuiz?: boolean;
@@ -61,6 +64,8 @@ export default function ChatPage() {
 
     // Case 1: From HomePage with initial message
     if (state?.initialMessage && state?.triggerBotResponse) {
+      console.log('Processing initial message from homepage:', state.initialMessage);
+      
       const userMessage: ChatMessage = {
         id: `homepage_${Date.now()}`,
         role: 'user',
@@ -69,10 +74,10 @@ export default function ChatPage() {
         type: 'text',
       };
 
-      // Set the user message for RealTimeChatComponent to process
       setMessages([userMessage]);
+      setInitialMessageProcessed(true);
       
-      // Clear state to prevent re-triggering
+      // Clear state ทันทีเพื่อป้องกันการทำงานซ้ำ
       navigate(location.pathname, { replace: true });
       return;
     }
@@ -93,6 +98,7 @@ export default function ChatPage() {
           type: 'text',
         };
         setMessages([userMessage]);
+        setInitialMessageProcessed(true);
       } else if (state.quizContext) {
         const autoMessage = QuizChatIntegrationService.createInitialChatMessage(state.quizContext);
         const userMessage: ChatMessage = {
@@ -103,6 +109,7 @@ export default function ChatPage() {
           type: 'text',
         };
         setMessages([userMessage]);
+        setInitialMessageProcessed(true);
       }
 
       navigate(location.pathname, { replace: true });
@@ -124,6 +131,7 @@ export default function ChatPage() {
         type: 'text',
       };
       setMessages([userMessage]);
+      setInitialMessageProcessed(true);
       return;
     }
 
@@ -140,10 +148,10 @@ export default function ChatPage() {
         type: 'text',
       };
       setMessages([userMessage]);
-
+      setInitialMessageProcessed(true);
       navigate('/chat', { replace: true });
     }
-  }, [location, navigate, user, setMessages]);
+  }, [location, navigate, user, setMessages, initialMessageProcessed]);
 
   const fetchSessions = async () => {
     if (!user) return;
