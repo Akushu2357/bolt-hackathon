@@ -62,7 +62,7 @@ export default function RealTimeChatComponent({
     inputRef.current?.focus();
   }, []);
 
-  // Update messages when initialMessages change
+  // Update messages when initialMessages change and handle initial message processing
   useEffect(() => {
     setMessages(initialMessages);
     
@@ -70,11 +70,11 @@ export default function RealTimeChatComponent({
     if (initialMessages.length > 0 && !hasProcessedInitialMessage) {
       const lastMessage = initialMessages[initialMessages.length - 1];
       
-      // If the last message is from user and we haven't processed it yet
+      // If the last message is from user and has homepage_ ID (from HomePage)
       if (lastMessage.role === 'user' && lastMessage.id.includes('homepage_')) {
         setHasProcessedInitialMessage(true);
         
-        // For guest users, increment chat usage when processing initial message
+        // 🎯 หัก chat usage เฉพาะ guest users เมื่อ process initial message จาก HomePage
         if (!user) {
           GuestLimitService.incrementUsage('chat');
         }
@@ -106,7 +106,7 @@ export default function RealTimeChatComponent({
     setMessages(prev => [...prev, typingIndicator]);
 
     try {
-      // Create context from current messages
+      // Create context from current messages (exclude typing indicator)
       const contextMessages = messages.filter(msg => !msg.metadata?.isTyping).slice(-5);
       const context = contextMessages.map(msg => `${msg.role}: ${msg.content}`);
 
@@ -184,7 +184,7 @@ export default function RealTimeChatComponent({
     // Handle bot response
     await handleBotResponse(messageToSend);
 
-    // Increment guest usage for regular chat messages (not initial messages)
+    // 🎯 หัก guest usage เฉพาะสำหรับ regular chat messages (ไม่ใช่ initial messages)
     if (!user) {
       GuestLimitService.incrementUsage('chat');
     }
