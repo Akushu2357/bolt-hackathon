@@ -74,7 +74,13 @@ export default function ChatPage() {
       setMessages([userMessage]);
 
       // Set the user message for RealTimeChatComponent to process
-      setMessages([userMessage]);
+      navigate(location.pathname, {
+        replace: true,
+        state: {
+          initialMessage: state.initialMessage,
+          triggerBotResponse: true
+        }
+      });
       
       // Clear state to prevent re-triggering
       navigate(location.pathname, { replace: true });
