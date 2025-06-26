@@ -64,20 +64,21 @@ export default function RealTimeChatComponent({
 
   // Update messages when initialMessages change
   useEffect(() => {
-    setMessages(initialMessages);
-    
-    // Check if we have a new initial message that needs bot response
-    if (initialMessages.length > 0 && !hasProcessedInitialMessage) {
-      const lastMessage = initialMessages[initialMessages.length - 1];
-      
-      // If the last message is from user and we haven't processed it yet
+    if (messages.length === 0 && initialMessages.length > 0) {
+      setMessages(initialMessages);
+    }
+  }, [initialMessages]);
+  
+  // Process bot response for homepage message
+  useEffect(() => {
+    if (messages.length > 0 && !hasProcessedInitialMessage) {
+      const lastMessage = messages[messages.length - 1];
       if (lastMessage.role === 'user' && lastMessage.id.includes('homepage_')) {
         setHasProcessedInitialMessage(true);
-        // Trigger bot response for the initial message
         handleBotResponse(lastMessage.content);
       }
     }
-  }, [initialMessages, hasProcessedInitialMessage]);
+  }, [messages, hasProcessedInitialMessage]);
 
   const addMessage = useCallback((message: ChatMessage) => {
     setMessages(prev => [...prev, message]);
