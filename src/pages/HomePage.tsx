@@ -42,7 +42,7 @@ interface StudyScheduleItem {
 }
 
 export default function HomePage() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats>({
     totalChats: 0,
@@ -50,7 +50,7 @@ export default function HomePage() {
     averageScore: 0,
     weakAreas: []
   });
-  const [loading, setLoading] = useState(true);
+  const [loadingData, setLoading] = useState(true);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [studySchedule, setStudySchedule] = useState<StudyScheduleItem[]>([]);
@@ -65,17 +65,20 @@ export default function HomePage() {
   const [scheduleLoading, setScheduleLoading] = useState(false);
 
   useEffect(() => {
+    if (loading) return; // Wait for auth to finish
     if (user) {
+      console.log('[HomePage] Authenticated user detected, fetching dashboard stats and study schedule...', user);
       fetchDashboardStats();
       fetchStudySchedule();
     } else {
-      // For guest users, load mock data
+      console.log('[HomePage] Guest user detected, loading guest data.');
       loadGuestData();
       setLoading(false);
     }
-  }, [user]);
+  }, [user, loading]);
 
   const loadGuestData = () => {
+    console.log('[HomePage] Loading guest data...');
     // Mock data for guest users
     const today = new Date();
     const yesterday = new Date(today);
@@ -121,6 +124,7 @@ export default function HomePage() {
   };
 
   const fetchDashboardStats = async () => {
+    console.log('[HomePage] Fetching dashboard stats...');
     try {
       // Fetch chat sessions count
       const { count: chatCount } = await supabase
@@ -153,6 +157,12 @@ export default function HomePage() {
         averageScore: Math.round(averageScore),
         weakAreas: uniqueWeakAreas.slice(0, 3)
       });
+      console.log('[HomePage] Dashboard stats fetched:', {
+        totalChats: chatCount || 0,
+        totalQuizzes: quizAttempts?.length || 0,
+        averageScore: Math.round(averageScore),
+        weakAreas: uniqueWeakAreas.slice(0, 3)
+      });
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
     } finally {
@@ -162,7 +172,7 @@ export default function HomePage() {
 
   const fetchStudySchedule = async () => {
     if (!user) return;
-    
+    console.log('[HomePage] Fetching study schedule for user:', user.id);
     try {
       setScheduleLoading(true);
       const scheduleItems = await ScheduleService.fetchUpcomingScheduleItems(user, 10);
@@ -178,6 +188,7 @@ export default function HomePage() {
       }));
       
       setStudySchedule(formattedItems);
+      console.log('[HomePage] Study schedule fetched:', formattedItems);
     } catch (error) {
       console.error('Error fetching study schedule:', error);
     } finally {
@@ -542,7 +553,7 @@ export default function HomePage() {
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Total Chats</p>
               <p className="text-2xl font-bold text-gray-900">
-                {loading ? '...' : stats.totalChats}
+                {loadingData ? '...' : stats.totalChats}
               </p>
             </div>
           </div>
@@ -556,7 +567,7 @@ export default function HomePage() {
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Quizzes Taken</p>
               <p className="text-2xl font-bold text-gray-900">
-                {loading ? '...' : stats.totalQuizzes}
+                {loadingData ? '...' : stats.totalQuizzes}
               </p>
             </div>
           </div>
@@ -570,7 +581,7 @@ export default function HomePage() {
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Average Score</p>
               <p className="text-2xl font-bold text-gray-900">
-                {loading ? '...' : `${stats.averageScore}%`}
+                {loadingData ? '...' : `${stats.averageScore}%`}
               </p>
             </div>
           </div>
@@ -584,7 +595,7 @@ export default function HomePage() {
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Focus Areas</p>
               <p className="text-2xl font-bold text-gray-900">
-                {loading ? '...' : stats.weakAreas.length}
+                {loadingData ? '...' : stats.weakAreas.length}
               </p>
             </div>
           </div>
@@ -810,7 +821,7 @@ export default function HomePage() {
           {/* Weak Areas */}
           <div className="card">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Areas to Focus</h3>
-            {loading ? (
+            {loadingData ? (
               <div className="space-y-2">
                 <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
                 <div className="h-4 bg-gray-200 rounded animate-pulse"></div>

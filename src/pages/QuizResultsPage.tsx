@@ -77,7 +77,7 @@ interface QuizStats {
 export default function QuizResultsPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [showAnswers, setShowAnswers] = useState(false);
   const [analysisText, setAnalysisText] = useState('');
   const [loadingAnalysis, setLoadingAnalysis] = useState(true);
@@ -94,12 +94,13 @@ export default function QuizResultsPage() {
       return;
     }
     generateAnalysis();
+    if (loading) return;
     if (user) {
       fetchQuizStats();
     } else {
       setLoadingStats(false);
     }
-  }, [state, navigate, user]);
+  }, [state, navigate, user, loading]);
 
   const fetchQuizStats = async () => {
     if (!user) return;

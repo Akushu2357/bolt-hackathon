@@ -10,7 +10,8 @@ import {
   Brain,
   Menu,
   X,
-  LogIn
+  LogIn,
+  BookOpen
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -33,6 +34,7 @@ export default function Layout({ children }: LayoutProps) {
     { name: 'Home', href: '/home', icon: Home },
     { name: 'Chat', href: '/chat', icon: MessageCircle },
     { name: 'Quiz', href: '/quiz', icon: FileQuestion },
+    { name: 'Learning', href: '/learning', icon: BookOpen },
   ];
 
   const isActive = (path: string) => location.pathname === path;
