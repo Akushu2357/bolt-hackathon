@@ -40,7 +40,7 @@ export default function RealTimeChatComponent({
   const [error, setError] = useState<string | null>(null);
   const [showCommands, setShowCommands] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
-  const [processedMessageIds, setProcessedMessageIds] = useState<Set<string>>(new Set());
+  const [hasProcessedInitialMessage, setHasProcessedInitialMessage] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -62,25 +62,22 @@ export default function RealTimeChatComponent({
     inputRef.current?.focus();
   }, []);
 
-  // Update messages when initialMessages change และ process initial messages
+  // Update messages when initialMessages change
   useEffect(() => {
     setMessages(initialMessages);
     
     // Check if we have a new initial message that needs bot response
-    if (initialMessages.length > 0) {
+    if (initialMessages.length > 0 && !hasProcessedInitialMessage) {
       const lastMessage = initialMessages[initialMessages.length - 1];
       
       // If the last message is from user and we haven't processed it yet
-      if (lastMessage.role === 'user' && 
-          lastMessage.id.includes('homepage_') && 
-          !processedMessageIds.has(lastMessage.id)) {
-        
-        setProcessedMessageIds(prev => new Set([...prev, lastMessage.id]));
-        // Trigger bot response for the initial message (หัก usage เฉพาะ initial message)
-        handleBotResponse(lastMessage.content, true);
+      if (lastMessage.role === 'user' && lastMessage.id.includes('homepage_')) {
+        setHasProcessedInitialMessage(true);
+        // Trigger bot response for the initial message
+        handleBotResponse(lastMessage.content);
       }
     }
-  }, [initialMessages, processedMessageIds]);
+  }, [initialMessages, hasProcessedInitialMessage]);
 
   const addMessage = useCallback((message: ChatMessage) => {
     setMessages(prev => [...prev, message]);
@@ -92,7 +89,7 @@ export default function RealTimeChatComponent({
   }, []);
 
   // Separate function to handle bot response
-  const handleBotResponse = async (messageText: string, isInitialMessage = false) => {
+  const handleBotResponse = async (messageText: string) => {
     if (isLoading) return;
 
     setIsLoading(true);
@@ -126,11 +123,6 @@ export default function RealTimeChatComponent({
 
       if (assistantMessage.type === 'quiz' && assistantMessage.metadata?.quizId) {
         onQuizGenerated?.(assistantMessage.metadata.quizId);
-      }
-
-      // 🎯 หัก usage เฉพาะสำหรับ initial messages จาก HomePage
-      if (!user && isInitialMessage) {
-        GuestLimitService.incrementUsage('chat');
       }
 
     } catch (error) {
@@ -179,17 +171,16 @@ export default function RealTimeChatComponent({
     setInputMessage('');
     setError(null);
 
-    // 🎯 เพิ่ม user message ใน UI ทันที (ก่อนเรียก bot response)
+    // Add user message
     setMessages(prev => [...prev, userMessage]);
     onMessageSent?.(userMessage);
 
-    // 🎯 หัก usage สำหรับ regular messages (ไม่ใช่ initial messages)
+    // Handle bot response
+    await handleBotResponse(messageToSend);
+
     if (!user) {
       GuestLimitService.incrementUsage('chat');
     }
-
-    // Handle bot response (ไม่หักซ้ำ)
-    await handleBotResponse(messageToSend, false);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
