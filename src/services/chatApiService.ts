@@ -29,7 +29,6 @@ export interface QuizGenerationRequest {
 
 export class ChatApiService {
   private static readonly API_BASE_URL = import.meta.env.VITE_SUPABASE_URL;
-  private static readonly OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 
   /**
    * Get authentication headers for API requests
@@ -56,14 +55,8 @@ export class ChatApiService {
         return await this.handleQuizCommand(message, sessionId);
       }
 
-      // For regular chat messages, use OpenAI API or fallback to mock
-      if (import.meta.env.VITE_GROQ_API_KEY) {
-        return await this.sendToGroq(message, context);
-      } else if (this.OPENAI_API_KEY) {
-        return await this.sendToOpenAI(message, context);
-      }
-      // Fallback to mock API if no API keys are available
-      return await this.sendToMockAPI(message);
+      // Use secure edge function for AI chat
+      return await this.sendToSecureAI(message, context);
     } catch (error) {
       console.error('Error sending message:', error);
       throw new Error('Failed to send message. Please try again.');
@@ -71,100 +64,43 @@ export class ChatApiService {
   }
 
   /**
-   * Send message to OpenAI API
+   * Send message to secure AI edge function
    */
-private static async sendToGroq(
-  message: string,
-  context?: string[]
-): Promise<ChatMessage> {
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`, // เพิ่มใน .env
-    },
-    body: JSON.stringify({
-      model: 'llama3-8b-8192', // หรือ llama3-70b-8192 ก็ได้
-      messages: [
-        {
-          role: 'system',
-          content: `You are TutorAI, a helpful educational assistant. ${
-            context ? `Previous context: ${context.join(' ')}` : ''
-          }`
-        },
-        {
-          role: 'user',
-          content: message
-        }
-      ],
-      max_tokens: 500,
-      temperature: 0.7,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Groq API error: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  const assistantMessage = data.choices[0]?.message?.content;
-
-  return {
-    id: `msg_${Date.now()}`,
-    role: 'assistant',
-    content: assistantMessage,
-    timestamp: new Date().toISOString(),
-    type: 'text'
-  };
-}
-
-
-  /**
-   * Send message to OpenAI API
-   */
-  private static async sendToOpenAI(
+  private static async sendToSecureAI(
     message: string,
     context?: string[]
   ): Promise<ChatMessage> {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
-        messages: [
-          {
-            role: 'system',
-            content: `You are TutorAI, a helpful educational assistant. ${
-              context ? `Previous context: ${context.join(' ')}` : ''
-            }`
-          },
-          {
-            role: 'user',
-            content: message
-          }
-        ],
-        max_tokens: 500,
-        temperature: 0.7,
-      }),
-    });
+    try {
+      const headers = await this.getAuthHeaders();
+      
+      const response = await fetch(`${this.API_BASE_URL}/functions/v1/chat-ai`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          message,
+          context: context || [],
+          sessionId: `session_${Date.now()}`
+        }),
+      });
 
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.statusText}`);
+      if (!response.ok) {
+        throw new Error(`AI API error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      return {
+        id: `msg_${Date.now()}`,
+        role: 'assistant',
+        content: data.response || data.message || 'I apologize, but I encountered an issue processing your request.',
+        timestamp: new Date().toISOString(),
+        type: 'text'
+      };
+    } catch (error) {
+      console.error('Error calling secure AI function:', error);
+      // Fallback to mock response
+      return await this.sendToMockAPI(message);
     }
-
-    const data = await response.json();
-    const assistantMessage = data.choices[0]?.message?.content;
-
-    return {
-      id: `msg_${Date.now()}`,
-      role: 'assistant',
-      content: assistantMessage,
-      timestamp: new Date().toISOString(),
-      type: 'text'
-    };
   }
 
   /**
@@ -214,21 +150,27 @@ private static async sendToGroq(
     sessionId: string
   ): Promise<ChatMessage> {
     try {
-      // ตัดช่องว่างส่วนเกินออก แล้วแยกด้วย space
+      // Parse command safely
       const parts = command.trim().split(' ');
-
       const validDifficulties = ['easy', 'medium', 'hard'];
       const maybeDifficulty = parts[parts.length - 1];
       const hasValidDifficulty = validDifficulties.includes(maybeDifficulty);
 
       const finalDifficulty = hasValidDifficulty ? maybeDifficulty : 'medium';
-
-      // รวม topic หลายคำไว้ เช่น "Three Kingdoms" หรือ "World War II"
       const topic = hasValidDifficulty
         ? parts.slice(1, parts.length - 1).join(' ')
         : parts.slice(1).join(' ');
 
-      // สร้างคำขอสำหรับ generate quiz
+      if (!topic.trim()) {
+        return {
+          id: `msg_${Date.now()}`,
+          role: 'assistant',
+          content: `❌ Please specify a topic for the quiz.\n\nExample: \`/create-quiz mathematics medium\``,
+          timestamp: new Date().toISOString(),
+          type: 'error'
+        };
+      }
+
       const quizRequest: QuizGenerationRequest = {
         topic,
         difficulty: finalDifficulty as 'easy' | 'medium' | 'hard',
@@ -262,7 +204,6 @@ private static async sendToGroq(
       };
     }
   }
-
 
   /**
    * Generate quiz from chat context
